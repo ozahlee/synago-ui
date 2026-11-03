@@ -10,7 +10,7 @@ import { runAction } from "@/components/form"
 import { API_URL, ApiError, del, getToken, openFile, qs, upload, useApi } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
-export type AttachmentType = "sermon" | "guest" | "invitation" | "placement" | "collection" | "marriage" | "loan" | "project"
+export type AttachmentType = "sermon" | "guest" | "invitation" | "placement" | "collection" | "marriage" | "loan" | "project" | "requisition"
 type Attachment = { id: string; label: string | null; name: string; mime: string; size: number; uploadedBy: string | null; uploadedAt: string | null }
 
 const ACCEPT = ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.jpg,.jpeg,.png,.webp,.txt"

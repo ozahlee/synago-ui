@@ -1,21 +1,23 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Users, UserCheck, GraduationCap, HandCoins, UserPlus, Plus, Megaphone, AlertTriangle, ClipboardCheck, MessageSquareText,
-  UserRoundPlus, ChevronRight, CheckCircle2, AlertCircle, Info, CalendarDays, Wallet,
+  Users, UserPlus, Plus, AlertTriangle, ClipboardCheck, MessageSquareText,
+  UserRoundPlus, CalendarDays, Wallet, History, ChevronDown, ClipboardList,
 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { MembershipChart } from "@/components/membership-chart"
-import { OffertoryChart } from "@/components/offertory-chart"
+import { AttentionQueue } from "@/components/attention-queue"
+import { DataStatus, EngagementCard, GivingYearChart, HealthCards, Verdict, short } from "@/components/dashboard-health"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RecentActivities } from "@/components/recent-activities"
-import { EmptyState, Page, PageHeader, StatCard } from "@/components/page"
-import type { AttentionItem, CalendarRange, DashboardStats, SundaySnapshot } from "@/lib/types"
+import { EmptyState, Page } from "@/components/page"
+import type { AttentionItem, CalendarRange, DashboardHealth, DashboardStats, HealthCard, SundaySnapshot } from "@/lib/types"
 import { qs, useApi } from "@/lib/api"
-import { KIND_META } from "@/lib/calendar"
+import { KIND_META, LITURGICAL } from "@/lib/calendar"
 import { useAuth } from "@/lib/auth"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -27,10 +29,53 @@ function greeting() {
 
 const todayLabel = () => new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
 
+type View = "pastor" | "treasurer" | "office"
+
 /**
- * The church office's start page. Leads with what needs doing ("Needs attention") and last Sunday, then the
- * figures each role works with: the treasurer sees money first, the pastor and secretary see people first.
- * Every block is shown only to roles that may open the page behind it.
+ * One screen per role: a handful of numbers and one list, chosen for the decisions that role makes.
+ * Someone with several roles (an admin, a vicar who also keeps the books) can switch views.
+ */
+const VIEWS: Record<View, {
+  label: string; hint: string
+  cards: HealthCard["key"][]
+  focus: { label: string; match: (i: AttentionItem) => boolean }
+  chart: "giving" | null
+  week: boolean
+}> = {
+  pastor: {
+    label: "Pastor", hint: "People, pastoral care and the overall picture",
+    cards: ["attendance", "giving", "members", "cash"],
+    focus: { label: "Everything", match: () => true },
+    chart: "giving", week: true,
+  },
+  treasurer: {
+    label: "Treasurer", hint: "Money in, money out, and what has to be paid",
+    cards: ["giving", "cash", "due", "unbanked"],
+    focus: { label: "Money items", match: (i) => i.area === "money" || i.key === "welfare" },
+    chart: "giving", week: false,
+  },
+  office: {
+    label: "Office", hint: "Registers, Sunday records and the week ahead",
+    cards: ["attendance", "members"],
+    focus: { label: "Registers and care", match: (i) => i.area !== "money" },
+    chart: null, week: true,
+  },
+}
+
+/** The views this user can use, and the one that fits their role best. */
+function useViews(): { views: View[]; fallback: View } {
+  const { can } = useAuth()
+  const people = can("members.view"), money = can("finance.view")
+  const views = ([people && money && "pastor", money && "treasurer", people && "office"].filter(Boolean)) as View[]
+  const fallback: View = can("finance.manage") && !can("members.manage") ? "treasurer"
+    : can("members.manage") && !money ? "office"
+    : people && money ? "pastor" : money ? "treasurer" : "office"
+  return { views, fallback }
+}
+
+/**
+ * The church office's start page: a verdict, the queue of what needs doing, then the few figures
+ * the chosen view works with. Every block is shown only to roles that may open the page behind it.
  */
 export function DashboardContent() {
   const { user, can } = useAuth()
@@ -42,152 +87,171 @@ export function DashboardContent() {
     if (!broad) router.replace(can("groups.lead") ? "/my-groups" : "/announcements")
   }, [broad, can, router])
   const { data: stats, error } = useApi<DashboardStats>(broad ? "/dashboard" : null)
+  const { data: health } = useApi<DashboardHealth>(broad ? "/dashboard/health" : null, { refreshInterval: 5 * 60_000 })
   const firstName = user?.name.split(" ")[0]
-  // the treasurer's day starts with money; everyone else's with people
-  const moneyFirst = finance && can("finance.manage") && !can("members.manage")
+  const [changes, setChanges] = useState(false)
+  const { views, fallback } = useViews()
+  const [picked, setPicked] = useState<View | null>(null)
+  useEffect(() => { try { const v = localStorage.getItem("synago.dashView") as View | null; if (v) setPicked(v) } catch {} }, [])
+  const view: View = picked && views.includes(picked) ? picked : fallback
+  const choose = (v: View) => { setPicked(v); try { localStorage.setItem("synago.dashView", v) } catch {} }
+  const cfg = VIEWS[view]
+  const cards = health?.cards ? cfg.cards.map((k) => health.cards.find((c) => c.key === k)).filter((c): c is HealthCard => !!c) : undefined
 
-  const peopleCards = people && (
+  const greet = `${greeting()}${firstName ? `, ${firstName}` : ""}`
+  const switcher = views.length > 1 && (
+    <div role="radiogroup" aria-label="Dashboard view" className="inline-flex shrink-0 rounded-lg border bg-card p-0.5 text-xs shadow-soft">
+      {views.map((v) => (
+        <button key={v} type="button" role="radio" aria-checked={v === view} title={VIEWS[v].hint} onClick={() => choose(v)}
+          className={cn("rounded-md px-2.5 py-1 font-medium transition", v === view ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
+          {VIEWS[v].label}
+        </button>
+      ))}
+    </div>
+  )
+  const rail = (
     <>
-      <StatCard label="Members" icon={Users} value={stats?.totalMembers?.toLocaleString()} trend={stats?.membersChange ?? undefined} hint="vs last month" />
-      <StatCard
-        label="Active members"
-        icon={UserCheck}
-        tone="success"
-        value={stats?.activeMembers?.toLocaleString()}
-        hint={stats && (stats.attendanceRate === null
-          ? `${Math.round(((stats.activeMembers ?? 0) / Math.max(stats.totalMembers ?? 0, 1)) * 100)}% of the congregation`
-          : `${stats.attendanceRate}% attendance`)}
-      />
-      <StatCard label="Sunday school" icon={GraduationCap} tone="info" value={stats?.sundaySchool?.toLocaleString()} hint="Members enrolled" />
+      <ThisSunday />
+      {cfg.week && <ComingUp />}
+      {view === "pastor" && health?.engagement && <EngagementCard data={health.engagement} />}
     </>
   )
-  const moneyCard = finance && (
-    <StatCard label="Offertory this month" icon={HandCoins} tone="gold" value={stats && money(stats.monthlyOffertory)} trend={stats?.offertoryChange ?? undefined} hint="vs last month" />
-  )
-  const offertoryChart = finance && stats && <OffertoryChart data={stats.offertoryTrends} />
-  const membershipChart = people && stats?.membershipByGender && <MembershipChart data={stats.membershipByGender} />
-  const charts = moneyFirst ? [offertoryChart, membershipChart] : [finance ? offertoryChart : membershipChart, finance ? membershipChart : null]
-  const [mainChart, sideChart] = charts.filter(Boolean)
+  const chart = cfg.chart && health?.givingYear ? <GivingYearChart data={health.givingYear} /> : null
 
   return (
-    <Page>
-      <PageHeader eyebrow={todayLabel()} title={`${greeting()}${firstName ? `, ${firstName}` : ""}`} description="Here's how the church family is doing, and what needs you today." actions={<QuickActions />} />
+    <Page className="space-y-6">
+      <DashboardHeader greet={greet} switcher={switcher} actions={<QuickActions view={view} />} />
+      {broad && <VerdictBanner verdict={health?.verdict} status={health?.dataStatus} onChanges={() => setChanges(true)} />}
+      <StickyVerdict verdict={health?.verdict} switcher={switcher} />
 
       {error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load the overview" description={error.message} />
       ) : (
-        <>
-          <section className="grid gap-6 lg:grid-cols-5">
-            <div className="min-w-0 lg:col-span-3"><NeedsAttention /></div>
-            <div className="min-w-0 lg:col-span-2"><ThisSunday /></div>
-          </section>
-
-          <section className={cn("grid gap-4 sm:grid-cols-2", people && finance ? "xl:grid-cols-4" : people ? "xl:grid-cols-3" : "xl:grid-cols-1")}>
-            {moneyFirst ? <>{moneyCard}{peopleCards}</> : <>{peopleCards}{moneyCard}</>}
-          </section>
-
-          {stats ? (
-            <>
-              {(mainChart || sideChart) && (
-                <section className="grid gap-6 lg:grid-cols-5">
-                  <div className={sideChart ? "lg:col-span-3" : "lg:col-span-5"}>{mainChart}</div>
-                  {sideChart && <div className="lg:col-span-2">{sideChart}</div>}
-                </section>
-              )}
-              <section className="grid gap-6 lg:grid-cols-5">
-                <div className="lg:col-span-3"><RecentActivities activities={stats.recentActivities} /></div>
-                <div className="space-y-6 lg:col-span-2">
-                  <ComingUp />
-                  <QuickLinks />
-                </div>
-              </section>
-            </>
-          ) : (
-            <div className="grid gap-6 lg:grid-cols-5">
-              <div className="h-80 animate-pulse rounded-2xl bg-muted lg:col-span-3" />
-              <div className="h-80 animate-pulse rounded-2xl bg-muted lg:col-span-2" />
-            </div>
-          )}
-        </>
+        // one 12-column grid: the left 8 are where you decide, the right 4 are context
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="flex min-w-0 flex-col gap-6 lg:col-span-8">
+            {/* on a phone the queue comes first, then the numbers */}
+            <div className="order-2 lg:order-1"><HealthCards cards={cards} /></div>
+            <div className="order-1 lg:order-2"><AttentionQueue key={view} focus={cfg.focus.label === "Everything" ? undefined : cfg.focus} /></div>
+            {chart && <div className="order-3">{chart}</div>}
+          </div>
+          <aside className="flex min-w-0 flex-col gap-6 lg:col-span-4">{rail}</aside>
+        </div>
       )}
+
+      <Dialog open={changes} onOpenChange={setChanges}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>What changed</DialogTitle>
+            <DialogDescription>The latest members, gifts and contributions recorded</DialogDescription>
+          </DialogHeader>
+          {stats ? <RecentActivities activities={stats.recentActivities} /> : <div className="h-40 animate-pulse rounded-xl bg-muted" />}
+        </DialogContent>
+      </Dialog>
     </Page>
   )
 }
 
-/** The everyday tasks, limited to what the user's role may do. */
-function QuickActions() {
-  const { can } = useAuth()
-  const actions = [
-    { href: "/offertory", label: "Record offering", icon: Plus, perm: "finance.manage", primary: true },
-    { href: "/attendance", label: "Attendance", icon: ClipboardCheck, perm: "members.manage" },
-    { href: "/visitors", label: "Log visitor", icon: UserRoundPlus, perm: "members.manage" },
-    { href: "/members", label: "Add member", icon: UserPlus, perm: "members.manage" },
-    { href: "/sms", label: "Send SMS", icon: MessageSquareText, perm: "sms.send" },
-  ].filter((a) => can(a.perm)).slice(0, 4)
-  const primary = actions.find((a) => a.primary) ?? actions[0]
+/** Date, the church season (its liturgical colour), the greeting; the view switch and the main action. */
+function DashboardHeader({ greet, switcher, actions }: { greet: string; switcher: React.ReactNode; actions: React.ReactNode }) {
+  const t = new Date()
+  const iso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`
+  const { data: cal } = useApi<CalendarRange>(qs("/calendar", { from: iso, to: iso, kinds: "event" }), { revalidateOnFocus: false })
+  const season = cal?.feasts[0] ?? cal?.season ?? cal?.seasons[0] ?? null
+  const colour = season ? LITURGICAL[season.colour].bg : null
   return (
-    <>
-      {actions.map((a) => (
-        <Button key={a.href} variant={a === primary ? "default" : "outline"} asChild>
-          <Link href={a.href}><a.icon className="size-4" /> {a.label}</Link>
-        </Button>
-      ))}
-    </>
+    <header className="flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          {todayLabel()}
+          {season && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] normal-case tracking-normal text-foreground">
+              <span className="size-2 rounded-full ring-1 ring-black/10" style={{ background: colour! }} />
+              {season.kind === "feast" ? season.name : `Season of ${season.name}`}
+            </span>
+          )}
+        </p>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">{greet}</h1>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">{switcher}{actions}</div>
+      {colour && <div aria-hidden className="h-1 w-full rounded-full opacity-80" style={{ background: `linear-gradient(90deg, ${colour}, transparent 70%)` }} />}
+    </header>
   )
 }
 
-const SEVERITY = {
-  danger: { icon: AlertCircle, dot: "bg-destructive", text: "text-destructive", badge: "bg-destructive/10 text-destructive" },
-  warning: { icon: AlertTriangle, dot: "bg-warning", text: "text-warning", badge: "bg-warning/15 text-[color-mix(in_oklch,var(--warning)_70%,black)] dark:text-warning" },
-  info: { icon: Info, dot: "bg-info", text: "text-info", badge: "bg-info/10 text-info" },
+const VERDICT_TONE = {
+  good: { dot: "bg-success", card: "border-success/25 bg-success/[0.05]" },
+  watch: { dot: "bg-warning", card: "border-warning/35 bg-warning/[0.06]" },
+  bad: { dot: "bg-destructive", card: "border-destructive/30 bg-destructive/[0.05]" },
+  neutral: { dot: "bg-muted-foreground", card: "bg-card" },
 } as const
-const AREA = { care: "Pastoral", registers: "Registers", money: "Money", admin: "Admin" } as const
 
-/** What someone in the office should act on, most urgent first; each row opens the page that resolves it. */
-function NeedsAttention() {
-  const { data } = useApi<AttentionItem[]>("/dashboard/attention", { refreshInterval: 5 * 60_000 })
-  const total = data?.reduce((n, i) => n + i.count, 0) ?? 0
+/** The one sentence to read first, full width, tinted by how things are. */
+function VerdictBanner({ verdict, status, onChanges }: { verdict: DashboardHealth["verdict"] | undefined; status: DashboardHealth["dataStatus"] | undefined; onChanges: () => void }) {
+  const tone = VERDICT_TONE[verdict?.tone ?? "neutral"]
   return (
-    <Card className="h-full gap-0 overflow-hidden py-0">
-      <div className="flex items-center justify-between border-b px-5 py-4">
-        <div>
-          <h2 className="text-lg font-semibold">Needs attention</h2>
-          <p className="text-xs text-muted-foreground">Things waiting on the office, most urgent first</p>
-        </div>
-        {data && data.length > 0 && <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-sm font-semibold tabular text-primary">{total}</span>}
+    <section aria-label="How things are" className={cn("flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-soft sm:flex-row sm:items-center", tone.card)}>
+      <span className={cn("hidden size-2.5 shrink-0 rounded-full sm:block", tone.dot)} aria-hidden />
+      <p className="min-w-0 flex-1 text-base leading-relaxed text-muted-foreground md:text-lg"><Verdict verdict={verdict} /></p>
+      <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+        <DataStatus status={status} />
+        <button type="button" onClick={onChanges} className="inline-flex items-center gap-1 hover:text-foreground"><History className="size-3.5" /> What changed</button>
       </div>
-      {!data ? (
-        <div className="space-y-3 p-5">{[1, 2, 3].map((i) => <div key={i} className="h-12 animate-pulse rounded-xl bg-muted" />)}</div>
-      ) : data.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
-          <CheckCircle2 className="size-10 text-success" />
-          <p className="font-semibold">All caught up</p>
-          <p className="max-w-xs text-sm text-muted-foreground">Nothing is waiting on you right now. Visitors, follow-ups, Sunday records and money checks will show up here.</p>
-        </div>
-      ) : (
-        <ul className="divide-y">
-          {data.map((item) => {
-            const s = SEVERITY[item.severity]
-            return (
-              <li key={item.key}>
-                <Link href={item.href} className="group flex items-center gap-3 px-5 py-3 transition hover:bg-muted/50">
-                  <s.icon className={cn("size-5 shrink-0", s.text)} />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium">
-                      {item.title}
-                      <span className="text-[11px] font-normal uppercase tracking-wider text-muted-foreground">{AREA[item.area]}</span>
-                    </p>
-                    {item.detail && <p className="truncate text-xs text-muted-foreground" title={item.detail}>{item.detail}</p>}
-                  </div>
-                  <span className={cn("min-w-7 rounded-full px-2 py-0.5 text-center text-sm font-semibold tabular", s.badge)}>{item.count}</span>
-                  <ChevronRight className="size-4 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" />
-                </Link>
-              </li>
-            )
-          })}
-        </ul>
+    </section>
+  )
+}
+
+/** Once the header scrolls away, a slim bar keeps the verdict and the view switch in sight. */
+function StickyVerdict({ verdict, switcher }: { verdict: DashboardHealth["verdict"] | undefined; switcher: React.ReactNode }) {
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const main = document.querySelector("main")
+    if (!main) return
+    const on = () => setShown(main.scrollTop > 260)
+    main.addEventListener("scroll", on, { passive: true })
+    return () => main.removeEventListener("scroll", on)
+  }, [])
+  if (!verdict) return null
+  return (
+    <div aria-hidden={!shown} className={cn("pointer-events-none sticky top-2 z-10 -mt-6 hidden h-0 md:top-[76px] md:block", shown && "pointer-events-auto")}>
+      <div className={cn("mx-auto flex max-w-3xl items-center gap-3 rounded-full border bg-card/95 px-4 py-2 shadow-lg backdrop-blur transition duration-200",
+        shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0")}>
+        <span className={cn("size-2.5 shrink-0 rounded-full", VERDICT_TONE[verdict.tone].dot)} />
+        <p className="min-w-0 flex-1 truncate text-sm"><b>{verdict.opening}:</b> <span className="text-muted-foreground">{verdict.parts.map((p) => p.text).join(", ")}</span></p>
+        {switcher}
+      </div>
+    </div>
+  )
+}
+
+/** One main action for the view, the rest in a "Record" menu, limited to what the role may do. */
+function QuickActions({ view }: { view: View }) {
+  const { can } = useAuth()
+  const actions = [
+    { href: "/offertory", label: "Record offering", icon: Plus, perm: "finance.manage", primary: view !== "office" },
+    { href: "/attendance", label: "Attendance", icon: ClipboardCheck, perm: "members.manage", primary: view === "office" },
+    { href: "/visitors", label: "Log a visitor", icon: UserRoundPlus, perm: "members.manage" },
+    { href: "/members", label: "Add a member", icon: UserPlus, perm: "members.manage" },
+    { href: "/requisitions", label: "Ask for a purchase", icon: ClipboardList, perm: "requisitions.request" },
+    { href: "/sms", label: "Send an SMS", icon: MessageSquareText, perm: "sms.send" },
+  ].filter((a) => can(a.perm))
+  const primary = actions.find((a) => a.primary) ?? actions[0]
+  const rest = actions.filter((a) => a !== primary)
+  if (!primary) return null
+  return (
+    <div className="inline-flex">
+      <Button asChild className={cn(rest.length && "rounded-r-none")}><Link href={primary.href}><primary.icon className="size-4" /> {primary.label}</Link></Button>
+      {rest.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="rounded-l-none border-l border-primary-foreground/20 px-2.5" aria-label="More things to record"><ChevronDown className="size-4" /></Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {rest.map((a) => <DropdownMenuItem key={a.href} asChild><Link href={a.href}><a.icon className="size-4" /> {a.label}</Link></DropdownMenuItem>)}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
-    </Card>
+    </div>
   )
 }
 
@@ -206,18 +270,15 @@ function Delta({ now, before, label, pct }: { now: number; before: number | null
 /** The latest Sunday per service: attendance and giving, with last week and the same Sunday last year. */
 function ThisSunday() {
   const { data } = useApi<SundaySnapshot>("/dashboard/sunday")
-  if (!data) return <Card className="h-full min-h-64 animate-pulse bg-muted" />
+  if (!data) return <Card className="min-h-64 animate-pulse bg-muted" />
   const day = new Date(`${data.date}T00:00`).toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
   const t = data.totals
   const recorded = data.services.some((s) => (s.attendance ?? 0) > 0 || (s.giving ?? 0) > 0)
   return (
-    <Card className="h-full gap-0 p-5">
-      <div className="mb-4 flex items-start justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">Last Sunday</h2>
-          <p className="text-xs text-muted-foreground">{day}</p>
-        </div>
-        <CalendarDays className="size-5 text-muted-foreground" />
+    <Card className="gap-0 p-5">
+      <div className="mb-4 flex items-baseline justify-between gap-2">
+        <h2 className={SECTION}>Last Sunday</h2>
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><CalendarDays className="size-3.5" />{day}</p>
       </div>
       {!recorded ? (
         <div className="py-6 text-center text-sm text-muted-foreground">
@@ -232,7 +293,7 @@ function ThisSunday() {
           <div className={cn("grid gap-3", data.showAttendance && data.showGiving ? "grid-cols-2" : "grid-cols-1")}>
             {data.showAttendance && t.attendance !== null && (
               <div className="rounded-xl border p-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5" /> In church</p>
+                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5" /> In church that day</p>
                 <p className="text-2xl font-semibold tabular">{t.attendance.toLocaleString()}</p>
                 <Delta now={t.attendance} before={t.attendancePrev} label="last week" />
                 {!!t.visitors && <p className="text-xs text-muted-foreground">incl. {t.visitors} visitor{t.visitors === 1 ? "" : "s"}</p>}
@@ -241,7 +302,7 @@ function ThisSunday() {
             {data.showGiving && t.giving !== null && (
               <div className="rounded-xl border p-3">
                 <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Wallet className="size-3.5" /> Offertory</p>
-                <p className="text-2xl font-semibold tabular">{money(t.giving)}</p>
+                <p className="truncate text-2xl font-semibold tabular" title={money(t.giving)}>{short(t.giving, "money")}</p>
                 <Delta now={t.giving} before={t.givingPrev} label="last week" pct />
                 <div><Delta now={t.giving} before={t.givingLastYear} label="last year" pct /></div>
               </div>
@@ -257,8 +318,8 @@ function ThisSunday() {
               {data.services.map((s) => (
                 <tr key={s.service}>
                   <td className="py-1.5">{s.service}</td>
-                  {data.showAttendance && <td className="py-1.5 text-right tabular">{s.attendance ?? <span className="text-xs text-warning">not recorded</span>}</td>}
-                  {data.showGiving && <td className="py-1.5 text-right tabular">{s.giving ? money(s.giving) : <span className="text-xs text-warning">not recorded</span>}</td>}
+                  {data.showAttendance && <td className="py-1.5 text-right tabular">{s.attendance ?? <MissingLink href={`/attendance?date=${data.date}`} />}</td>}
+                  {data.showGiving && <td className="py-1.5 text-right tabular">{s.giving ? money(s.giving) : <MissingLink href="/offertory" />}</td>}
                 </tr>
               ))}
             </tbody>
@@ -269,36 +330,12 @@ function ThisSunday() {
   )
 }
 
-function QuickLinks() {
-  const { can } = useAuth()
-  const links = [
-    { href: "/members", label: "Members directory", note: "Find, add and update members", icon: Users, perm: "members.view" },
-    { href: "/ministries", label: "Ministries", note: "Groups, leaders and activities", icon: UserCheck, perm: "members.view" },
-    { href: "/projects", label: "Projects & giving", note: "Land, building and other causes", icon: HandCoins, perm: "finance.view" },
-    { href: "/notifications", label: "Announcements", note: "Messages for the staff", icon: Megaphone },
-  ].filter((l) => !l.perm || can(l.perm))
+/** Section titles: one small-caps style everywhere on the dashboard. */
+export const SECTION = "text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"
 
-  return (
-    <div className="space-y-3">
-      <h2 className="px-1 text-lg font-semibold">Go to</h2>
-      {links.map((l) => (
-        <Link
-          key={l.href}
-          href={l.href}
-          className="group flex items-center gap-4 rounded-2xl border bg-card p-4 shadow-soft transition hover:-translate-y-0.5 hover:border-primary/30"
-        >
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <l.icon className="size-[18px]" />
-          </span>
-          <span className="flex-1">
-            <span className="block text-sm font-semibold">{l.label}</span>
-            <span className="block text-xs text-muted-foreground">{l.note}</span>
-          </span>
-          <span className="text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary">→</span>
-        </Link>
-      ))}
-    </div>
-  )
+/** A gap in last Sunday's records, fixed in one click (this is the only place it is shown). */
+function MissingLink({ href }: { href: string }) {
+  return <Link href={href} className="inline-flex items-center gap-1 rounded-md bg-warning/12 px-1.5 py-0.5 text-xs font-medium text-[color-mix(in_oklch,var(--warning)_70%,black)] hover:underline dark:text-warning">Record</Link>
 }
 
 /** The next seven days from the calendar: events, burials, weddings, baptisms (no routine services/meetings). */
@@ -313,9 +350,9 @@ function ComingUp() {
   const rest = items.filter((i) => i.kind !== "birthday").slice(0, 6)
   return (
     <Card className="gap-0 p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-lg font-semibold">This week</h2>
-        <Link href="/calendar" className="text-sm text-primary hover:underline">Calendar →</Link>
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className={SECTION}>This week</h2>
+        <Link href="/calendar" className="text-xs text-primary hover:underline">Calendar →</Link>
       </div>
       {!data ? <div className="h-24 animate-pulse rounded-xl bg-muted" /> : (
         <ul className="space-y-2">

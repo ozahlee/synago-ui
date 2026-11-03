@@ -53,6 +53,9 @@ export function SettingsContent() {
       quietHoursEnd: str(fd, "quietHoursEnd"),
       smsMonthlyBudget: Number(str(fd, "smsMonthlyBudget") ?? 0),
       financialYearStartMonth: Number(str(fd, "financialYearStartMonth") ?? 1),
+      givingTarget: str(fd, "givingTarget") ? Number(str(fd, "givingTarget")) : null,
+      cashOnHandLimit: Number(str(fd, "cashOnHandLimit") ?? 0),
+      requisitionSeniorThreshold: Number(str(fd, "requisitionSeniorThreshold") ?? 500000),
       sacramentRequirements: reqs
         .filter((r) => r.label.trim())
         .map((r) => ({ ...r, key: r.key || slug(r.label), fee: r.fee === null || Number.isNaN(r.fee) ? null : r.fee })),
@@ -254,14 +257,33 @@ export function SettingsContent() {
         <Card>
           <CardHeader>
             <CardTitle>Financial year</CardTitle>
-            <CardDescription>The month the books start each year. Used by the income statement, trial balance and balance sheet.</CardDescription>
+            <CardDescription>The month the books start each year, used by the income statement, trial balance and balance sheet. An optional giving target lets the dashboard show whether giving is ahead or behind.</CardDescription>
           </CardHeader>
-          <CardContent className="max-w-xs space-y-2">
+          <CardContent className="grid max-w-xl gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
             <Label htmlFor="c-fy">Starts in</Label>
             <select id="c-fy" name="financialYearStartMonth" defaultValue={data.financialYearStartMonth ?? 1}
               className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none">
               {["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-gt">Giving target for the year ({CURRENCY})</Label>
+              <Input id="c-gt" name="givingTarget" type="number" min="0" step="1000" defaultValue={data.givingTarget ?? ""} placeholder="Optional" />
+              <FieldError error={form.error} name="givingTarget" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-cash">Cash at hand limit ({CURRENCY})</Label>
+              <Input id="c-cash" name="cashOnHandLimit" type="number" min="0" step="1000" defaultValue={data.cashOnHandLimit ?? 200000} />
+              <p className="text-xs text-muted-foreground">Above this, cash held for more than 3 days is flagged to bank. 0 turns it off.</p>
+              <FieldError error={form.error} name="cashOnHandLimit" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="c-req">Vicar also approves requisitions from ({CURRENCY})</Label>
+              <Input id="c-req" name="requisitionSeniorThreshold" type="number" min="0" step="1000" defaultValue={data.requisitionSeniorThreshold ?? 500000} />
+              <p className="text-xs text-muted-foreground">Below this, the treasurer&apos;s approval is enough.</p>
+              <FieldError error={form.error} name="requisitionSeniorThreshold" />
+            </div>
           </CardContent>
         </Card>
 

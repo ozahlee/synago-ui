@@ -171,6 +171,43 @@ export type AttentionItem = {
   detail: string | null
   count: number
   href: string
+  due: string | null
+  impact: number
+  perm: string | null
+  fingerprint: string
+  bucket: "today" | "week" | "later"
+  hidden: "snoozed" | "done" | null
+  snoozedUntil: string | null
+  assignedTo: { id: string; name: string; me: boolean; by: string | null; at: string | null } | null
+  /** Set on unusual-figure flags: why it was flagged. */
+  why: string | null
+}
+
+export type HealthCard = {
+  key: "giving" | "attendance" | "members" | "cash" | "due" | "unbanked"
+  label: string
+  format: "money" | "number"
+  value: number | null
+  unit?: string
+  compare: { label: string; value: number; pct: number } | null
+  status: "good" | "watch" | "act" | "neutral"
+  spark: number[]
+  sparkLabel: string | null
+  cause: string | null
+  href: string
+}
+
+export type DashboardHealth = {
+  cards: HealthCard[]
+  givingYear: { yearLabel: string; target: number | null; months: Array<{ month: string; thisYear: number | null; lastYear: number; target: number | null }> } | null
+  dataStatus: { asOf: string; sunday: string; missing: Array<{ what: "attendance" | "offertory"; service: string; href: string }> }
+  verdict: { tone: "good" | "watch" | "bad" | "neutral"; opening: string; parts: Array<{ text: string; tone: "good" | "watch" | "bad" | "neutral"; href: string | null }> }
+  engagement: {
+    segments: Array<{ key: "new" | "regular" | "occasional" | "drifting" | "lost" | "unknown"; label: string; count: number }>
+    total: number
+    drifting: Array<{ id: string; name: string; phone: string | null; lastSeen: string; lastWhat: string | null; lastVisit: string | null }>
+    driftingNotVisited: number
+  } | null
 }
 export type SundaySnapshot = {
   date: string
@@ -185,7 +222,7 @@ export type SundaySnapshot = {
 export const PAYMENT_METHODS = ["Cash", "Mobile Money", "Bank Transfer", "Cheque"] as const
 export const TRANSACTION_CATEGORIES = {
   income: ["Offerings", "Tithes", "Donations", "Events", "Fundraising", "Rental Income", "Welfare", "Other"],
-  expense: ["Utilities", "Salaries", "Maintenance", "Ministry Programs", "Outreach", "Media & Technology", "Supplies", "Events", "Missions", "Welfare", "Other"],
+  expense: ["Utilities", "Salaries", "Maintenance", "Ministry Programs", "Outreach", "Media & Technology", "Supplies", "Equipment", "Events", "Missions", "Welfare", "Merchandise stock", "Other"],
 } as const
 
 export type Denomination = "anglican" | "pentecostal" | "other"
@@ -202,6 +239,9 @@ export type ChurchSettings = {
   quietHoursEnd?: string
   smsMonthlyBudget?: number
   financialYearStartMonth?: number
+  givingTarget?: number | null
+  cashOnHandLimit?: number | null
+  requisitionSeniorThreshold?: number | null
   sacramentRequirements: RequirementConfig[]
 }
 
@@ -1036,4 +1076,44 @@ export type WeddingDetail = {
   household: { id: string; name: string } | null
   bothMembers: boolean
   clashes?: Array<{ title: string; start: string }>
+}
+
+export type RequisitionStatus = "pending" | "awaiting_senior" | "approved" | "paid" | "rejected" | "cancelled"
+export type RequisitionRow = {
+  id: string; number: string; title: string; category: string
+  ministry: { id: string; name: string } | null
+  total: number; paidAmount: number | null; status: RequisitionStatus; neededBy: string | null
+  requestedBy: string | null; mine: boolean; createdAt: string; waitingOnMe: boolean
+}
+export type Requisition = RequisitionRow & {
+  purpose: string | null
+  project: { id: string; name: string } | null
+  items: Array<{ id: string; description: string; quantity: number; unit: string | null; unitCost: number; amount: number }>
+  approvals: Array<{ stage: "treasurer" | "senior"; decision: "approved" | "rejected"; by: string | null; note: string | null; at: string }>
+  needsSenior: boolean; threshold: number
+  budget: { allocated: number; spent: number; remaining: number; after: number } | null
+  payment: { date: string | null; amount: number; method: string | null; supplier: string | null; by: string | null; variance: number } | null
+  can: { approve: boolean; stage: "treasurer" | "senior" | null; pay: boolean; edit: boolean; cancel: boolean }
+}
+
+export type SaleItem = {
+  id: string; name: string; kind: "merchandise" | "in_kind"; status: "available" | "sold_out" | "archived"
+  ministry: { id: string; name: string } | null; project: { id: string; name: string } | null
+  price: number | null; unit: string | null; stock: number | null
+  donor: string | null; donorMemberId: string | null; receivedOn: string | null; estimatedValue: number | null; notes: string | null
+  sold: number; revenue: number; collected: number; owed: number; cost: number; profit: number | null
+}
+export type Sale = {
+  id: string; number: string; date: string
+  item: { id: string; name: string | null; kind: "merchandise" | "in_kind" | null; unit: string | null; seller: string }
+  quantity: number; unitPrice: number; total: number; paid: number; owed: number; dueDate: string | null; overdue: boolean
+  buyer: string; buyerMemberId: string | null; buyerPhone: string | null; occasion: "harvest" | null; event: string | null
+  payments: Array<{ date: string; amount: number; method: string }> | null
+}
+export type SalesSummary = {
+  sold: number; collected: number; owed: number; stockCost: number
+  bySeller: Array<{ label: string; sold: number; collected: number; owed: number; count: number }>
+  byItem: Array<{ label: string; sold: number; collected: number; owed: number; count: number }>
+  inKind: { realised: number; estimated: number }
+  events: string[]
 }

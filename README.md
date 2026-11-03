@@ -28,7 +28,7 @@ Sign in with the seeded admin: `admin@synago.test` / `password`.
 | Page | Can do |
 |---|---|
 | Global search | ⌘K / Ctrl+K (or `/`) anywhere, or the sidebar search box: members (name, phone, pledge no.), visitors, ministries, cell groups, baptisms, marriages, pledges, welfare, announcements, staff and pages. Results respect the user's role; members open in place, other results deep-link (`?open=`, `?q=`, `?tab=`). Remembers recently opened items |
-| Dashboard | Live member/offertory stats, gender split, 6-month giving trends, recent activity |
+| Dashboard | A ranked to-do queue, last Sunday, health cards with comparison and status, giving through the year against last year or a target, and how fresh the data is |
 | Members | Server-side search/filter/paging; add, edit (incl. village/parish/sub county, ministry), delete |
 | Ministries | Create/edit/delete; leader picker; view members & activities; add/remove members and activities |
 | Offertory | Record/edit/delete gifts (linked member, visitor name, or anonymous); monthly totals vs last month; category chart |
@@ -90,9 +90,63 @@ Lists and reports share one period picker (`components/period-filter.tsx`, `lib/
 
 ### Dashboard
 
-The dashboard starts with **Needs attention**: the items your role can act on, most urgent first, each linking to the filtered page that resolves it (e.g. `/pledges?status=overdue`, `/attendance?date=…`, `/care?tab=visits`). Next to it is **Last Sunday**: attendance and giving per service, with week-on-week and year-on-year change.
+The dashboard is built for deciding, not just reading figures.
 
-Quick actions and figures follow the user's permissions. The treasurer sees money first, everyone else sees people first, and nobody sees figures for a page they can't open.
+**Layout:** one 12-column grid. The left 8 columns are for deciding: health cards, the queue and giving through the year. The right 4 are context: last Sunday, the week ahead, engagement and people to call.
+- **Header:** the date, a chip with the church season in its liturgical colour and a matching stripe, the view switch, and one main action with a **Record ▾** menu for the rest.
+- **Verdict banner:** full width, tinted by tone, with "Updated…" and "What changed". A slim copy sticks to the top once you scroll.
+- **Health cards:** every card has the same rows (label, value, trend line, comparison, cause), so they line up. Colour appears only for *Watch* or *Act now*.
+- **Missing Sunday records** show once, as **Record** links in the Last Sunday card.
+- **On a phone:** the verdict, then today's queue, then the health cards as a swipeable row.
+
+- **Verdict:** one sentence under the greeting. It gives an opening judgement from the health cards ("A good week", "Mostly good", "A mixed picture", "Needs a closer look"), then the parts worth knowing, e.g. "attendance up 20% on the month before, 16 members drifting away, and 3 things need you today". Each part is underlined in its status colour and links to its evidence.
+- **Freshness line:** "Updated 2 min ago", plus anything from last Sunday not yet entered (e.g. "Youth Service offertory not entered"), so nobody decides on half a week's numbers.
+- **Needs attention:** a ranked queue grouped into **Today** (overdue or urgent), **This week** and **Can wait**. Within each group, items assigned to you come first, then by urgency, due date and amount at stake. Each row opens the page that resolves it, and its menu lets you:
+  - **mark it done:** it comes back if its figures change;
+  - **snooze it** for a day, 3 days or a week (just for you);
+  - **assign it** to someone who holds the permission it needs: they get a notification, and everyone sees who has it.
+
+  When nothing is waiting, the queue shows **All clear**.
+- **Last Sunday:** attendance and giving per service, compared with the week before and the same Sunday last year.
+- **Health cards:** colour appears only when something is off ("Watch" from −5%, "Act now" from −15%). Each card shows the figure, a comparison, a 12-point trend line and the main cause in one line, and links to its list:
+  - **Giving this year:** against the same days last year, or against the target set in Settings.
+  - **Sunday attendance:** the 4-week average against the 4 weeks before.
+  - **Members:** people joined against the same time last year.
+  - **Free to spend:** cash and bank, less restricted funds and loan repayments due within 30 days, in weeks of usual spending.
+- **Giving through the year:** this year cumulative against last year (and the target), with the gap shaded. There is a table view.
+- **How engaged are members:** active members grouped as New, Regular (seen in 4 weeks), Occasional (4–8 weeks), Drifting (8 weeks–6 months), Gone quiet and No record. "Seen" means giving, contributions or Sunday school recorded by name; Sunday headcounts aren't per person, so nobody is called lost just because they don't give by name. Each group opens the filtered member list (`/members?engagement=drifting`). Below it is **Worth a call this week**: the drifting members seen most recently, with a call button. The queue also lists drifting members nobody has visited in a month.
+- **What changed:** the recent-activity feed, now in a dialog off the main page.
+
+- **Unusual figures** are flagged in the queue with an "Unusual" badge and a plain "Why flagged" line:
+  - a service more than 25% smaller than its average over the 8 Sundays before;
+  - an offertory more than 30% below its usual;
+  - a project over budget, or 90% spent with under 60% of its time gone;
+  - a pledge drive more than 25 points behind the time gone by;
+  - cash at hand above the limit in Settings with some of it held over 3 days. Recording the bank deposit as a journal clears it.
+- **One screen per role:**
+  - **Pastor:** the whole queue, last Sunday, attendance, giving, members, free cash, engagement and the week ahead.
+  - **Treasurer:** money items in the queue, last Sunday, giving, free cash, payments due in 30 days, cash not banked, and giving through the year.
+  - **Office:** registers and care items, last Sunday, attendance, members and the week ahead.
+
+  The view is picked from the user's permissions. Anyone with more than one role can switch (remembered per browser), and the queue's "+N others" shows the rest.
+
+Every figure follows the user's permissions: nobody sees figures for a page they can't open.
+
+### Requisitions and items & sales
+
+**Requisitions** are under *Finance → Requisitions*.
+- **Asking:** anyone with the permission (ministry leaders included) asks for what's needed, item by item, with a "needed by" date and a reason, and can attach a quote.
+- **Approval:** the treasurer approves. At or above the threshold in Settings (default UGX 500,000), the vicar approves too, and it must be two different people.
+- **Budget check:** each request shows the category's budget this month and what it would leave.
+- **Paying:** the treasurer records what was actually paid and to whom (a warning shows above +10%), and attaches the receipt. The expense goes into the books, and goods bought to sell can go straight into stock.
+- **Tracking:** each request shows a timeline of who did what. Requests waiting on you appear on the dashboard queue.
+
+**Items & sales** are under *Finance → Items & sales*.
+- **Merchandise:** T-shirts, calendars and books sold by the church or a ministry. Stock and its cost are tracked, and profit is shown per item.
+- **Gifts in kind:** a goat, sugar or chickens, recorded with the donor and an estimated value, then sold.
+- **Harvest auctions:** these count as harvest income, and "Save & next lot" speeds up an auction.
+- **Pay later:** part payment now with a promised date. The **Owing** tab has "Paid" and "Send reminder SMS" buttons, and late buyers appear on the dashboard.
+- **Reports:** a summary by who sells (church or each ministry) and by item. Gifts in kind show what they were sold for against their estimate.
 
 ### Loans
 

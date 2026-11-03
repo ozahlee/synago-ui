@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils"
 
 export const refreshProjects = () => mutate((k) => typeof k === "string" && (k.startsWith("/projects") || k.startsWith("/accounts") || k.startsWith("/budgets") || k.startsWith("/pledges") || k.startsWith("/offertory")))
 const STATUS = { planning: "info", active: "success", on_hold: "warning", completed: "gold" } as const
-const EXPENSE_CATS = ["Building materials", "Labour", "Professional fees", "Transport", "Equipment", ...TRANSACTION_CATEGORIES.expense.filter((c) => c !== "Other"), "Other"]
+const EXPENSE_CATS = [...new Set(["Building materials", "Labour", "Professional fees", "Transport", "Equipment", ...TRANSACTION_CATEGORIES.expense.filter((c) => c !== "Other"), "Other"])]
 
 export function ProjectsContent() {
   const router = useRouter()

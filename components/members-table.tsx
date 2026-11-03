@@ -21,6 +21,7 @@ type MembersTableProps = {
   searchQuery: string
   filterGender: string
   filterStatus: string
+  engagement?: string
   toolbar?: React.ReactNode
 }
 
@@ -28,17 +29,17 @@ type MembersTableProps = {
 export const refreshMembers = () =>
   mutate((key) => typeof key === "string" && (key.startsWith("/members") || key === "/dashboard" || key.startsWith("/ministries")))
 
-export function MembersTable({ searchQuery, filterGender, filterStatus, toolbar }: MembersTableProps) {
+export function MembersTable({ searchQuery, filterGender, filterStatus, engagement, toolbar }: MembersTableProps) {
   const { can } = useAuth()
   const canManage = can("members.manage")
   const [page, setPage] = useState(1)
   const [selected, setSelected] = useState<Member | null>(null)
   const [dialog, setDialog] = useState<"view" | "edit" | "delete" | null>(null)
 
-  useEffect(() => setPage(1), [searchQuery, filterGender, filterStatus])
+  useEffect(() => setPage(1), [searchQuery, filterGender, filterStatus, engagement])
 
   const { rows: members, meta, isLoading, error } = usePaginated<Member>(
-    qs("/members", { search: searchQuery, gender: filterGender, status: filterStatus, page, perPage: 20 }),
+    qs("/members", { search: searchQuery, gender: filterGender, status: filterStatus, engagement, page, perPage: 20 }),
   )
 
   const open = (member: Member, which: typeof dialog) => {

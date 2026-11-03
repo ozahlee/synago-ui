@@ -12,6 +12,9 @@ export const PERMISSION_LABELS: Record<string, { label: string; area: string }> 
   "sms.send": { label: "Send bulk SMS", area: "Office" },
   "sacraments.override": { label: "Complete a baptism/confirmation with requirements missing", area: "Congregation" },
   "groups.lead": { label: "See “My groups” (position-holders)", area: "Leaders" },
+  "requisitions.request": { label: "Ask for things to be bought (requisitions)", area: "Stewardship" },
+  "requisitions.approve": { label: "Give the vicar's approval on larger requisitions", area: "Stewardship" },
+  "sales.manage": { label: "Record items for sale and sales", area: "Stewardship" },
 }
 
 export const ROLE_BLURB: Record<string, string> = {

@@ -49,6 +49,8 @@ import {
   BellRing,
   BookOpen,
   Building2,
+  ClipboardList,
+  ShoppingBag,
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -106,6 +108,8 @@ export const NAVIGATION: NavItem[] = [
 
   { name: "Accounts", href: "/accounts", icon: Wallet, permission: "finance.view", group: "Finance" },
   { name: "Loans", href: "/loans", icon: Banknote, permission: "finance.view", group: "Finance" },
+  { name: "Requisitions", href: "/requisitions", icon: ClipboardList, permission: "requisitions.request|finance.view|requisitions.approve", group: "Finance" },
+  { name: "Items & sales", href: "/sales", icon: ShoppingBag, permission: "finance.view|sales.manage", group: "Finance" },
   { name: "Budget", href: "/budget", icon: PieChart, permission: "finance.view", group: "Finance" },
   { name: "Financial reports", href: "/accounting", icon: Scale, permission: "finance.view", group: "Finance" },
   { name: "Tithe report", href: "/tithe-report", icon: FileBarChart, permission: "finance.view", group: "Finance" },

@@ -14,6 +14,7 @@ type AuthState = {
   /** Reload the signed-in user (e.g. after finishing set-up or confirming the email). */
   refresh: () => Promise<void>
   logout: () => Promise<void>
+  /** "a|b" means either permission. */
   can: (permission: string) => boolean
   /** Replace the signed-in user (after editing your own profile). */
   setUser: (user: User) => void
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [clear])
 
   const value = useMemo<AuthState>(
-    () => ({ user, loading, login, signup, refresh, logout, can: (p) => !!user?.permissions.includes(p), setUser }),
+    () => ({ user, loading, login, signup, refresh, logout, can: (p) => p.split("|").some((x) => !!user?.permissions.includes(x)), setUser }),
     [user, loading, login, signup, refresh, logout],
   )
 

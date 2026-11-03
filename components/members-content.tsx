@@ -11,6 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/lib/auth"
 import { useUrlParam } from "@/lib/use-url-param"
 
+/** Matches the backend's engagement segments (MemberEngagement::SEGMENTS). */
+export const ENGAGEMENT = [
+  { key: "new", label: "New", hint: "new (joined in the last 3 months)" },
+  { key: "regular", label: "Regular", hint: "regular (seen in the last 4 weeks)" },
+  { key: "occasional", label: "Occasional", hint: "occasional (last seen 4 to 8 weeks ago)" },
+  { key: "drifting", label: "Drifting", hint: "drifting away (last seen 8 weeks to 6 months ago)" },
+  { key: "lost", label: "Gone quiet", hint: "gone quiet (nothing for over 6 months)" },
+  { key: "unknown", label: "No record", hint: "never recorded by name" },
+] as const
+
 export function MembersContent() {
   const { can } = useAuth()
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -18,6 +28,8 @@ export function MembersContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterGender, setFilterGender] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
+  const [engagement, setEngagement] = useState("all")
+  useUrlParam("engagement", (e) => ENGAGEMENT.some((x) => x.key === e) && setEngagement(e))
 
   useUrlParam("q", (q) => {
     setSearchInput(q)
@@ -63,6 +75,15 @@ export function MembersContent() {
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={engagement} onValueChange={(v) => v && setEngagement(v)}>
+          <SelectTrigger size="sm" className="h-9 flex-1 sm:w-40" aria-label="Engagement">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any engagement</SelectItem>
+            {ENGAGEMENT.map((e) => <SelectItem key={e.key} value={e.key}>{e.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )
@@ -83,7 +104,13 @@ export function MembersContent() {
         }
       />
 
-      <MembersTable searchQuery={searchQuery} filterGender={filterGender} filterStatus={filterStatus} toolbar={toolbar} />
+      {engagement !== "all" && (
+        <p className="-mb-2 text-sm text-muted-foreground">
+          Showing active members who are <b className="text-foreground">{ENGAGEMENT.find((e) => e.key === engagement)?.hint}</b>, going by giving, contributions and Sunday school recorded by name.{" "}
+          <button type="button" className="text-primary hover:underline" onClick={() => setEngagement("all")}>Show everyone</button>
+        </p>
+      )}
+      <MembersTable searchQuery={searchQuery} filterGender={filterGender} filterStatus={filterStatus} engagement={engagement} toolbar={toolbar} />
 
       <MemberFormDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} />
     </Page>
