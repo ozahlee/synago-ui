@@ -71,7 +71,7 @@ function BalanceSheetTab({ church, onAccount }: { church: string; onAccount: (id
       <Toolbar printHref={`/accounting/print?report=bs&asOf=${asOf}`} onCsv={data && (() => downloadCsv(`balance-sheet-${asOf}.csv`, csv.balanceSheet(data)))}>
         <PeriodFilter period={period} asOf />
       </Toolbar>
-      {data && <Notices balanced={data.balanced} warnings={data.warnings} unmapped={data.unmapped} />}
+      {data && <Notices balanced={data.balanced} warnings={data.warnings} notes={data.notes} unmapped={data.unmapped} />}
       {data ? <BalanceSheetView data={data} church={church} onAccount={onAccount} /> : <Loading />}
     </div>
   )

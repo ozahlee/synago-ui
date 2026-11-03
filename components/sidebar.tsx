@@ -2,6 +2,8 @@
 
 import {
   Scale,
+  Mic2,
+  Banknote,
   Contact,
   Gift,
   Landmark,
@@ -85,6 +87,7 @@ export const NAVIGATION: NavItem[] = [
   { name: "Areas", href: "/areas", icon: Map, permission: "members.view", group: "People" },
   { name: "Ministries", href: "/ministries", icon: UsersRound, permission: "members.view", group: "People" },
   { name: "Positions", href: "/positions", icon: BadgeCheck, permission: "members.view", group: "People" },
+  { name: "Guests & placements", href: "/guests", icon: Mic2, permission: "members.view", group: "People" },
 
   { name: "Attendance", href: "/attendance", icon: ClipboardCheck, permission: "members.view", group: "Church life" },
   { name: "Sunday school", href: "/sunday-school", icon: School, permission: "members.view", group: "Church life" },
@@ -99,8 +102,10 @@ export const NAVIGATION: NavItem[] = [
   { name: "Projects & giving", href: "/projects", icon: Hammer, permission: "finance.view", group: "Giving" },
   { name: "Organisations", href: "/organisations", icon: Building2, permission: "finance.view", group: "Giving" },
   { name: "Welfare fund", href: "/welfare", icon: HandHeart, permission: "welfare.manage", group: "Giving" },
+  { name: "Personal collections", href: "/collections", icon: HeartHandshake, permission: "members.view", group: "Giving" },
 
   { name: "Accounts", href: "/accounts", icon: Wallet, permission: "finance.view", group: "Finance" },
+  { name: "Loans", href: "/loans", icon: Banknote, permission: "finance.view", group: "Finance" },
   { name: "Budget", href: "/budget", icon: PieChart, permission: "finance.view", group: "Finance" },
   { name: "Financial reports", href: "/accounting", icon: Scale, permission: "finance.view", group: "Finance" },
   { name: "Tithe report", href: "/tithe-report", icon: FileBarChart, permission: "finance.view", group: "Finance" },

@@ -297,6 +297,7 @@ export type Marriage = {
   brideName: string
   brideMemberId: string | null
   date: string
+  time?: string | null
   place: string | null
   officiant: string | null
   witnesses: string | null
@@ -537,6 +538,9 @@ export type Project = {
   pledgeBalance: number
   spent: number
   remaining: number
+  /** borrowing for the project: received from lenders / repaid to them */
+  loanReceived?: number
+  loanRepaid?: number
   contributions: number
   startDate: string | null
   endDate: string | null
@@ -671,6 +675,9 @@ export type Sermon = {
   seriesId: string | null
   series: string | null
   scriptures: string[]
+  /** Bible readings in service order, with who reads them */
+  readings?: SermonReading[]
+  preacherGuestId?: string | null
   notes: string | null
   recordingUrl: string | null
   season: { name: string; colour: LiturgicalColour } | null
@@ -740,7 +747,7 @@ export type Household = {
   members: number
   memberList?: Array<{ id: string; name: string; gender: string; age: number | null; phone: string | null; pledgeNumber: string | null; status: string; isHead: boolean }>
 }
-export const ORGANISATION_TYPES = ["company", "ngo", "church", "government", "school", "other"] as const
+export const ORGANISATION_TYPES = ["bank", "sacco", "company", "ngo", "church", "government", "school", "other"] as const
 export type Organisation = { id: string; name: string; type: (typeof ORGANISATION_TYPES)[number]; contactName: string | null; phone: string | null; email: string | null; notes: string | null; contributions: number; given: number }
 
 // ---- Accounting (general ledger & financial statements)
@@ -764,9 +771,9 @@ export type AccountMappings = {
   mappings: Array<{ source: MappingSource; key: string; accountId: string; account: string }>
   unmapped: Partial<Record<MappingSource, string[]>>
 }
-export const JOURNAL_KINDS = ["general", "opening", "transfer", "depreciation", "adjustment"] as const
+export const JOURNAL_KINDS = ["general", "opening", "transfer", "depreciation", "adjustment", "loan"] as const
 export type JournalLine = { accountId: string; account: string; fund: "general" | "welfare" | "project"; projectId: string | null; project: string | null; debit: number; credit: number; memo: string | null }
-export type Journal = { id: string; date: string; reference: string; memo: string; kind: (typeof JOURNAL_KINDS)[number]; recordedBy: string | null; total: number; lines: JournalLine[] }
+export type Journal = { id: string; date: string; reference: string; memo: string; kind: (typeof JOURNAL_KINDS)[number]; loanId?: string | null; recordedBy: string | null; total: number; lines: JournalLine[] }
 export type FundOption = { key: "general" | "welfare" | "project"; projectId?: string; name: string }
 
 export type TrialBalance = {
@@ -794,6 +801,8 @@ export type BalanceSheet = {
   asOf: string
   yearStart: string
   warnings: string[]
+  /** expected situations worth explaining, e.g. a project fund below zero because a loan paid for the work */
+  notes?: string[]
   assets: { current: BalanceSheetLine[]; fixed: BalanceSheetLine[]; currentTotal: number; fixedTotal: number; total: number }
   liabilities: { rows: BalanceSheetLine[]; total: number }
   netAssets: number
@@ -810,4 +819,221 @@ export type GeneralLedger = {
   truncated: boolean
   totals: { debit: number; credit: number }
   rows: Array<{ date: string; reference: string; source: "offertory" | "transaction" | "journal"; sourceId: string; description: string; fund: string; debit: number; credit: number; balance: number }>
+}
+
+// ---- Loans (formal borrowing for a project)
+export const LOAN_METHODS = ["reducing", "flat", "none"] as const
+export type LoanMethod = (typeof LOAN_METHODS)[number]
+export type LoanStatus = "proposed" | "approved" | "active" | "closed"
+export type LoanInstallmentRow = { number: number; dueDate: string; principal: number; interest: number; amount: number; paid: number; status: "paid" | "partial" | "due" | "overdue" }
+export type LoanSummary = {
+  disbursed: number
+  undrawn: number
+  principalPaid: number
+  interestPaid: number
+  feesPaid: number
+  outstanding: number
+  totalInterest: number
+  remainingScheduled: number
+  progress: number
+  endDate: string | null
+  nextInstallment: { number: number; dueDate: string; amount: number; full: number; daysLeft: number } | null
+  arrears: { count: number; amount: number; since: string | null }
+  installments?: LoanInstallmentRow[]
+}
+export type Loan = {
+  id: string
+  projectId: string
+  project: string | null
+  organisationId: string | null
+  lender: string
+  lenderName: string | null
+  accountNumber: string | null
+  purpose: string
+  principal: number
+  interestMethod: LoanMethod
+  annualRate: number
+  termPeriods: number
+  frequency: "monthly" | "quarterly"
+  gracePeriods: number
+  startDate: string
+  fees: number
+  security: string | null
+  guarantors: string | null
+  approvalRef: string | null
+  approvedOn: string | null
+  consentRef: string | null
+  status: LoanStatus
+  accountId: string | null
+  account: string | null
+  notes: string | null
+  summary: LoanSummary
+}
+export type LoanDetail = Loan & {
+  summary: LoanSummary & { installments: LoanInstallmentRow[] }
+  disbursements: Array<{ id: string; date: string; amount: number; account: string | null; notes: string | null }>
+  payments: Array<{ id: string; date: string; amount: number; principal: number; interest: number; fees: number; reference: string | null; account: string | null; notes: string | null }>
+  events: Array<{ type: string; note: string | null; by: string | null; at: string | null }>
+}
+export type LoanStats = { owed: number; undrawn: number; repaid: number; interestPaid: number; arrears: number; active: number; nextDue: LoanSummary["nextInstallment"] }
+export type LoanProjection = {
+  owed: number
+  scheduledPerMonth: number
+  endDate: string | null
+  givingPerMonth: number
+  givingCovers: number | null
+  shortfallPerMonth: number
+  atGiving: { months: number; date: string; interest: number } | null
+  extra: number
+  withExtra: { months: number; date: string; interest: number; monthsSaved: number | null; interestSaved: number | null } | null
+  note: string | null
+}
+export type LoanPreview = {
+  installment: number
+  graceInstallment: number | null
+  totalInterest: number
+  totalRepayable: number
+  endDate: string | null
+  annualRepayment: number
+  incomeLast12Months: number
+  ratio: number | null
+  limit: number
+  affordable: boolean | null
+  schedule: Array<{ number: number; due_date: string; principal: number; interest: number }>
+}
+
+// ---- Sermon readings
+export type ReadingRole = "first" | "psalm" | "second" | "third" | "gospel"
+export type SermonReading = { role: ReadingRole; label: string; ref: string; readerMemberId: string | null; reader: string | null }
+export const READING_LABELS: Record<ReadingRole, string> = { first: "First reading", psalm: "Psalm", second: "Second reading", third: "Third reading", gospel: "Gospel" }
+/** Which readings a tradition uses, in service order. */
+export const READING_SETS: Record<"anglican" | "default", ReadingRole[]> = { anglican: ["first", "psalm", "second", "gospel"], default: ["first", "second", "third"] }
+
+// ---- Guest ministers & placements
+export const GUEST_TITLES = ["Rev.", "Rev. Canon", "Ven.", "Rt. Rev.", "Bishop", "Pastor", "Apostle", "Evangelist", "Prophet", "Dr.", "Mr.", "Mrs.", "Ms."] as const
+export const INVITATION_PURPOSES = ["preaching", "conference", "crusade", "retreat", "wedding", "funeral", "other"] as const
+export type InvitationStatus = "invited" | "confirmed" | "declined" | "completed" | "cancelled"
+export type GuestMinister = {
+  id: string
+  title: string | null
+  name: string
+  fullName: string
+  churchName: string | null
+  denomination: string | null
+  phone: string | null
+  email: string | null
+  inviteAgain: boolean | null
+  notes: string | null
+  invitations?: number
+  sermons?: number
+  lastVisit?: string | null
+  nextVisit?: string | null
+}
+export type GuestInvitation = {
+  id: string
+  guestId: string
+  guest: string | null
+  guestPhone: string | null
+  date: string
+  service: string | null
+  purpose: (typeof INVITATION_PURPOSES)[number]
+  topic: string | null
+  status: InvitationStatus
+  sermonId: string | null
+  hostMemberId: string | null
+  host: string | null
+  accommodation: string | null
+  facilitation: number | null
+  paid: boolean
+  confirmationSent: boolean
+  thanked: boolean
+  feedback: string | null
+}
+export type GuestIndex = { guests: GuestMinister[]; upcoming: GuestInvitation[]; stats: { guests: number; thisYear: number; awaiting: number; facilitation: number; inKind?: number; unpaid: number } }
+export type GuestDetail = GuestMinister & { invitations: GuestInvitation[]; sermons: Array<{ id: string; date: string; service: string | null; title: string | null; theme: string | null; scriptures: string[]; status: string }> }
+
+export type PlacementKind = "teaching" | "ministry"
+export type CollectionSummary = { id: string; status: "open" | "handed_over" | "closed"; given: number; target: number | null; handedOverOn: string | null; gift: string | null }
+export type Placement = {
+  id: string
+  kind: PlacementKind
+  name: string
+  gender: "male" | "female" | null
+  phone: string | null
+  email: string | null
+  institution: string
+  course: string | null
+  supervisor: string | null
+  supervisorPhone: string | null
+  mentorMemberId: string | null
+  mentor: string | null
+  startDate: string
+  endDate: string | null
+  sendOffDate: string | null
+  status: "upcoming" | "active" | "completed"
+  daysLeft: number | null
+  weeks: number | null
+  assignments: Array<{ area: string; detail: string | null }>
+  allowanceAmount?: number | null
+  allowanceFrequency?: "weekly" | "monthly" | null
+  rating: number | null
+  report: string | null
+  notes: string | null
+  collection: CollectionSummary | null
+}
+export type PlacementStats = { active: number; upcoming: number; endingSoon: number; thisYear: number; institutions: number }
+
+/** Money members give to a person (send-off, wedding…): recorded, never church income. */
+export type PersonalCollection = {
+  id: string
+  purpose: string
+  beneficiary: string
+  relatedType: "placement" | "marriage" | "guest" | "member" | "other" | null
+  relatedId: string | null
+  target: number | null
+  deadline: string | null
+  coordinatorMemberId: string | null
+  coordinator: string | null
+  status: "open" | "handed_over" | "closed"
+  given: number
+  promised: number
+  stillPromised: number
+  givers: number
+  handedOverOn: string | null
+  handedOverAmount: number | null
+  gift: string | null
+  notes: string | null
+  gifts?: Array<{ id: string; date: string; giver: string; memberId: string | null; amount: number; pledged: number | null; paymentMethod: string | null; reference: string }>
+}
+
+// ---- Hosting / upkeep costs (guest visits, placements)
+export const UPKEEP_CATEGORIES = ["accommodation", "meals", "transport", "honorarium", "allowance", "airtime", "gift", "other"] as const
+export type UpkeepCategory = (typeof UPKEEP_CATEGORIES)[number]
+export type UpkeepLine = { id: string; category: UpkeepCategory; description: string | null; budget: number | null; amount: number | null; date: string | null; providedBy: "church" | "member"; member: string | null; paymentMethod: string | null; state: "paid" | "in_kind" | "planned" }
+export type UpkeepSummary = {
+  lines: UpkeepLine[]
+  totals: { budget: number; paid: number; inKind: number; planned: number; total: number }
+  byCategory: Array<{ category: UpkeepCategory; budget: number; actual: number }>
+  allowance: { amount: number; frequency: "weekly" | "monthly"; periods: number; due: number; paid: number; owed: number } | null
+}
+
+// ---- Weddings
+export type WeddingDetail = {
+  id: string
+  time: string | null
+  banns: Array<{ id: string; number: number; date: string; service: string | null; readBy: string | null; objection: string | null; objectionResolved: boolean; resolution: string | null }>
+  nextBannsSunday: string | null
+  readiness: Array<{ key: string; label: string; auto: boolean; done: boolean; detail: string | null }>
+  ready: boolean
+  readyCount: number
+  counselling: Array<{ date: string; counsellor: string | null; topic: string | null }>
+  fees: Array<{ id: string; item: string; amount: number; paid: boolean; paidOn: string | null; paymentMethod: string | null }>
+  feesTotal: number
+  feesPaid: number
+  collection: { id: string; given: number; target: number | null; status: string } | null
+  programme: Array<{ time: string | null; item: string; who: string | null }>
+  eventId: string | null
+  household: { id: string; name: string } | null
+  bothMembers: boolean
+  clashes?: Array<{ title: string; start: string }>
 }

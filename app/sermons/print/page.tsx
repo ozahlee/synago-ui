@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/auth"
 import { LITURGICAL } from "@/lib/calendar"
 import { longDate } from "@/lib/format"
 import { useSettings } from "@/lib/settings"
-import type { CalendarRange, Sermon } from "@/lib/types"
+import type { CalendarRange, Marriage, Sermon } from "@/lib/types"
 
 function Programme() {
   const params = useSearchParams()
@@ -19,6 +19,9 @@ function Programme() {
   const { user, loading } = useAuth()
   const settings = useSettings()
   const { rows: sermons, isLoading } = usePaginated<Sermon>(user ? qs("/sermons", { date, perPage: 20 }) : null)
+  const usesBanns = settings.denomination !== "pentecostal"
+  const { rows: weddings } = usePaginated<Marriage>(user && usesBanns ? qs("/marriages", { status: "scheduled", perPage: 50 }) : null)
+  const banns = weddings.filter((m) => m.bannsRead < 3 && m.date > date)
   const { data: cal } = useApi<CalendarRange>(user ? qs("/calendar", { from: date, to: date, kinds: "event" }) : null)
 
   useEffect(() => {
@@ -71,6 +74,10 @@ function Programme() {
                     <dd className="font-medium">{s.preacher}{s.visiting && s.preacherChurch ? `, ${s.preacherChurch}` : ""}</dd>
                     {(s.theme || s.title) && (<><dt className="text-muted-foreground">Theme</dt><dd className="font-medium">{[s.theme, s.title && s.title !== s.theme ? `“${s.title}”` : null].filter(Boolean).join(" · ")}</dd></>)}
                     {s.series && (<><dt className="text-muted-foreground">Series</dt><dd>{s.series}</dd></>)}
+                    {(s.readings?.length ?? 0) > 0 && (
+                      <><dt className="text-muted-foreground">Readings</dt>
+                        <dd className="space-y-0.5">{s.readings!.map((r) => <div key={r.role}><span className="text-muted-foreground">{r.label}:</span> <span className="font-medium">{r.ref}</span>{r.reader && <span className="text-muted-foreground"> ({r.reader})</span>}</div>)}</dd></>
+                    )}
                     {s.scriptures.length > 0 && (
                       <><dt className="text-muted-foreground">Readings</dt>
                         <dd className="flex flex-wrap gap-x-3 gap-y-1">{s.scriptures.map((r, i) => <span key={r} className={i === 0 ? "font-semibold" : ""}>{i === 0 && <BookOpen className="mr-1 inline size-3.5" />}{r}</span>)}</dd></>
@@ -79,6 +86,19 @@ function Programme() {
                 </li>
               ))}
             </ol>
+          )}
+
+          {banns.length > 0 && (
+            <section className="mt-8 break-inside-avoid border-t pt-5">
+              <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Banns of marriage</h2>
+              <p className="mb-2 text-sm italic text-muted-foreground">If any of you know cause or just impediment why these persons should not be joined together in Holy Matrimony, ye are to declare it.</p>
+              <ul className="space-y-1 text-sm">
+                {banns.map((m) => (
+                  <li key={m.id}><span className="font-medium">{m.groomName}</span> and <span className="font-medium">{m.brideName}</span>
+                    <span className="text-muted-foreground"> · {["first", "second", "third"][m.bannsRead]} time of asking · wedding {longDate(m.date)}</span></li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {events.length > 0 && (

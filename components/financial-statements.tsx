@@ -1,6 +1,6 @@
 "use client"
 
-import { AlertTriangle, CheckCircle2 } from "lucide-react"
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react"
 import { CURRENCY, longDate } from "@/lib/format"
 import type { AccountMappings, BalanceSheet, IncomeStatement, IncomeStatementSection, TrialBalance } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -52,11 +52,12 @@ function Heading({ children, cols }: { children: React.ReactNode; cols: number }
   return <tr><td colSpan={cols + 1} className="pb-1 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">{children}</td></tr>
 }
 
-export function Notices({ balanced, warnings = [], unmapped }: { balanced: boolean; warnings?: string[]; unmapped?: AccountMappings["unmapped"] }) {
+export function Notices({ balanced, warnings = [], notes = [], unmapped }: { balanced: boolean; warnings?: string[]; notes?: string[]; unmapped?: AccountMappings["unmapped"] }) {
   const um = Object.entries(unmapped ?? {}).flatMap(([src, keys]) => (keys ?? []).map((k) => `${k} (${src.replace("_", " ")})`))
   return (
     <div className="space-y-2 print:hidden">
       {!balanced && <p className="flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"><AlertTriangle className="size-4" /> The statement does not balance. Check the most recent journals.</p>}
+      {notes.map((n) => <p key={n} className="flex items-start gap-2 rounded-xl border bg-muted/60 px-3 py-2 text-sm text-muted-foreground"><Info className="mt-0.5 size-4 shrink-0" />{n}</p>)}
       {warnings.map((w) => <p key={w} className="flex items-start gap-2 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-sm"><AlertTriangle className="mt-0.5 size-4 shrink-0 text-warning" />{w}</p>)}
       {um.length > 0 && (
         <p className="flex items-start gap-2 rounded-xl border bg-muted px-3 py-2 text-sm text-muted-foreground">
@@ -90,7 +91,7 @@ export function BalanceSheetView({ data, church, onAccount }: { data: BalanceShe
 
           {data.liabilities.rows.length > 0 && <>
             <Heading cols={1}>Liabilities</Heading>
-            {data.liabilities.rows.map((a) => <Row key={a.id} indent code={a.code} label={a.name} cells={[a.amount]} onClick={click(a.id)} />)}
+            {data.liabilities.rows.map((a) => <Row key={`${a.id}-${a.name}`} indent code={a.code} label={a.name} cells={[a.amount]} onClick={click(a.id)} />)}
             <Row label="Total liabilities" cells={[data.liabilities.total]} strong rule="single" />
           </>}
           <Row label="Net assets" cells={[data.netAssets]} strong rule="double" />

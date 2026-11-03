@@ -26,17 +26,19 @@ import { FieldError, num, runAction, str, useApiForm } from "@/components/form"
 import { MemberPicker } from "@/components/member-picker"
 import { HouseholdPicker } from "@/components/households-content"
 import { ProjectDialog, SpendDialog, refreshProjects } from "@/components/projects-content"
-import { del, patch, post, put, qs, useApi, usePaginated } from "@/lib/api"
+import { api, del, patch, post, put, qs, useApi, usePaginated } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { useSettings } from "@/lib/settings"
 import { CURRENCY, date, humanize, longDate, money, today } from "@/lib/format"
 import {
-  PAYMENT_METHODS, type CellGroupIndex, type Contribution, type ContributionKind, type ContributorType, type Ministry,
+  PAYMENT_METHODS, type Loan, type CellGroupIndex, type Contribution, type ContributionKind, type ContributorType, type Ministry,
   type Organisation, type Pledge, type Project, type ProjectMilestone, type ProjectSummary,
 } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { usePeriod } from "@/lib/period"
 import { PeriodFilter, periodParams } from "@/components/period-filter"
+import useSWR from "swr"
+import { Attachments } from "@/components/attachments"
 
 const STATUS = { planning: "info", active: "success", on_hold: "warning", completed: "gold" } as const
 export const KIND_LABEL: Record<ContributionKind, string> = { gift: "Gift", thanksgiving: "Thanksgiving", pledge_payment: "Pledge payment", in_kind: "In kind" }
@@ -64,6 +66,8 @@ export function ProjectView() {
   if (!p) return <Page><div className="h-10 w-64 animate-pulse rounded-xl bg-muted" /><div className="h-56 animate-pulse rounded-2xl bg-muted" /></Page>
 
   const raisedPct = pct(p.raised, p.goal)
+  // giving less spending, plus money borrowed for the project less what has been repaid
+  const cashInHand = p.raised - p.spent + (p.loanReceived ?? 0) - (p.loanRepaid ?? 0)
   const pledgeOutstanding = p.pledgeBalance
   const pledgedPct = Math.min(100 - raisedPct, pct(pledgeOutstanding, p.goal))
   const left = daysLeft(p.deadline)
@@ -141,7 +145,11 @@ export function ProjectView() {
             <div className={cn("h-full rounded-full", p.spent > p.budget ? "bg-destructive" : "bg-info")} style={{ width: `${pct(p.spent, p.budget)}%` }} />
           </div>
           <dl className="mt-4 space-y-2 text-sm">
-            <div className="flex justify-between"><dt className="text-muted-foreground">Cash in hand</dt><dd className={cn("font-semibold tabular", p.raised - p.spent < 0 && "text-destructive")}>{money(p.raised - p.spent)}</dd></div>
+            {(p.loanReceived ?? 0) > 0 && <>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Borrowed (received)</dt><dd className="tabular">+{money(p.loanReceived)}</dd></div>
+              <div className="flex justify-between"><dt className="text-muted-foreground">Loan repayments</dt><dd className="tabular">−{money(p.loanRepaid)}</dd></div>
+            </>}
+            <div className="flex justify-between"><dt className="text-muted-foreground">Cash in hand</dt><dd className={cn("font-semibold tabular", cashInHand < 0 && "text-destructive")}>{money(cashInHand)}</dd></div>
             <div className="flex justify-between"><dt className="text-muted-foreground">Budget left</dt><dd className="font-semibold tabular">{money(p.remaining)}</dd></div>
           </dl>
           {(p.byCategory?.length ?? 0) > 0 && (
@@ -151,6 +159,8 @@ export function ProjectView() {
           )}
         </Card>
       </section>
+
+      <ProjectLoans projectId={p.id} />
 
       {summary && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -171,6 +181,7 @@ export function ProjectView() {
           <TabsTrigger value="pledges">Pledges</TabsTrigger>
           <TabsTrigger value="spending">Spending</TabsTrigger>
           <TabsTrigger value="milestones">Milestones</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
         <TabsContent value="contributions"><ContributionsTab project={p} canManage={canManage} /></TabsContent>
         <TabsContent value="honour"><HonourRoll summary={summary} /></TabsContent>
@@ -179,12 +190,46 @@ export function ProjectView() {
         <TabsContent value="pledges"><PledgesTab project={p} /></TabsContent>
         <TabsContent value="spending"><SpendingTab project={p} /></TabsContent>
         <TabsContent value="milestones"><MilestonesTab project={p} canManage={canManage} /></TabsContent>
+        <TabsContent value="documents"><Card className="p-6"><Attachments type="project" id={p.id} canEdit={canManage} title="Project documents" hint="Plans, bills of quantities, quotations, land title, contractor agreements, photos" suggestions={["Building plan", "Bill of quantities", "Quotation", "Land title", "Contract", "Progress photo"]} /></Card></TabsContent>
       </Tabs>
 
       {dialog === "give" && <ContributionDialog project={p} open onOpenChange={(o) => !o && setDialog(null)} />}
       {dialog === "spend" && <SpendDialog project={p} open onOpenChange={(o) => !o && setDialog(null)} />}
       {dialog === "edit" && <ProjectDialog record={p} open onOpenChange={(o) => !o && setDialog(null)} />}
     </Page>
+  )
+}
+
+/** "Clear the loan": loans taken for this project, counting down as they're repaid. */
+function ProjectLoans({ projectId }: { projectId: string }) {
+  const { data } = useSWR<{ data: Loan[] }>(qs("/loans", { projectId }), (k: string) => api<{ data: Loan[] }>(k))
+  const loans = (data?.data ?? []).filter((l) => l.status !== "proposed")
+  if (!loans.length) return null
+  return (
+    <section className="grid gap-5 md:grid-cols-2">
+      {loans.map((l) => {
+        const s = l.summary
+        const owed = s.outstanding + s.undrawn
+        return (
+          <Card key={l.id} className="gap-0 p-5">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Clear the loan</p>
+                <h3 className="font-semibold">{l.lender}</h3>
+              </div>
+              <Button variant="ghost" size="sm" asChild><Link href={`/loans/view?id=${l.id}`}>Open loan →</Link></Button>
+            </div>
+            <p className="mt-3 text-sm"><span className="text-2xl font-semibold tabular">{money(owed)}</span> <span className="text-muted-foreground">still owed · {Math.round(s.progress)}% repaid</span></p>
+            <div className="mt-2 h-3 overflow-hidden rounded-full bg-success/20"><div className="ml-auto h-full rounded-full bg-primary" style={{ width: `${Math.max(0, 100 - s.progress)}%` }} /></div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {s.arrears.count > 0 ? <span className="text-destructive">{money(s.arrears.amount)} overdue</span>
+                : s.nextInstallment ? <>Next {money(s.nextInstallment.amount)} on {date(s.nextInstallment.dueDate)}</> : l.status === "closed" ? "Fully repaid" : "Waiting for the money"}
+              {s.endDate && l.status !== "closed" ? ` · last instalment ${date(s.endDate)}` : ""}. Giving to this project repays it.
+            </p>
+          </Card>
+        )
+      })}
+    </section>
   )
 }
 

@@ -21,7 +21,7 @@ import { humanize, money } from "@/lib/format"
 import { ORGANISATION_TYPES, type Organisation } from "@/lib/types"
 
 const refresh = () => mutate((k) => typeof k === "string" && k.startsWith("/organisations"))
-const TYPE_LABEL: Record<Organisation["type"], string> = { company: "Company", ngo: "NGO", church: "Church / diocese", government: "Government", school: "School", other: "Other" }
+const TYPE_LABEL: Record<Organisation["type"], string> = { bank: "Bank", sacco: "SACCO", company: "Company", ngo: "NGO", church: "Church / diocese", government: "Government", school: "School", other: "Other" }
 
 export function OrganisationsContent() {
   const { can } = useAuth()

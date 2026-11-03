@@ -2,6 +2,7 @@
 
 /** Bookkeeping: journal entries, the chart of accounts with its posting rules, and the ledger for any account. */
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { mutate } from "swr"
 import { Download, Plus, Trash2, Pencil, MoreHorizontal, BookOpenCheck, Scale, Lock, ArrowRightLeft, Landmark, Search } from "lucide-react"
@@ -146,7 +147,9 @@ export function JournalEntries() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold tabular">{acct(j.total)}</span>
-                    {canManage && (
+                    {j.loanId ? (
+                      <Button variant="ghost" size="sm" asChild><Link href={`/loans/view?id=${j.loanId}`}>Open loan</Link></Button>
+                    ) : canManage && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -259,7 +262,7 @@ function JournalDialog({ record, preset, open, onOpenChange }: { record?: Journa
               <Label htmlFor="jv-k">Kind</Label>
               <Select value={kind} onValueChange={setKind}>
                 <SelectTrigger id="jv-k" className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>{JOURNAL_KINDS.map((k) => <SelectItem key={k} value={k}>{humanize(k)}</SelectItem>)}</SelectContent>
+                <SelectContent>{JOURNAL_KINDS.filter((k) => k !== "loan").map((k) => <SelectItem key={k} value={k}>{humanize(k)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>

@@ -48,7 +48,7 @@ Sign in with the seeded admin: `admin@synago.test` / `password`.
 | Staff & access | Admin: add/edit staff, assign roles, disable sign-in, role × permission matrix |
 | Church settings | Admin: church name, tradition, diocese, Sunday services, pledge-number prefix |
 | Attendance | Sunday head count per service (men / women / children / visitors), 12-week chart, attendance rate on the dashboard |
-| Marriages | Planned weddings with banns (Anglican) and counselling, marriage register, printable certificate |
+| Marriages | Each wedding has a full page with five tabs. **Banns:** three dated readings with objections and their resolution, plus a printable notice or certificate of banns. **Readiness:** a checklist drawn from the registers plus hand ticks, and counselling sessions. **Money:** church fees, paid as income, and the couple's contributions collection, kept off the books. **The day:** order of service and run sheet, booking the calendar and venue with clash warnings, then forming a family. Weddings still needing banns appear on the printed Sunday programme. Also: the printable marriage register by year (`/marriages/register`), the marriage shown on the member's profile, the official photo on the certificate, and anniversary greetings |
 | Visitors | First-time guests, 4-step follow-up checklist, contact log, prayer requests, "Make member" |
 | Cell groups | Home fellowships by village, leaders/hosts, "Group by village" to place unassigned members |
 | Pledges | Promises for building fund / harvest etc., progress by purpose, record payments (they appear in offertory as pledge gifts) |
@@ -93,4 +93,28 @@ Lists and reports share one period picker (`components/period-filter.tsx`, `lib/
 The dashboard starts with **Needs attention**: the items your role can act on, most urgent first, each linking to the filtered page that resolves it (e.g. `/pledges?status=overdue`, `/attendance?date=…`, `/care?tab=visits`). Next to it is **Last Sunday**: attendance and giving per service, with week-on-week and year-on-year change.
 
 Quick actions and figures follow the user's permissions. The treasurer sees money first, everyone else sees people first, and nobody sees figures for a page they can't open.
+
+### Loans
+
+*Finance → Loans* (`/loans`) lists the church's loans with what's owed, the next instalment and any arrears.
+- **New loan:** shows the repayments and checks affordability as you type.
+- **A loan's own page** (`/loans/view?id=`):
+  - A countdown bar, and a debt-free card: giving vs repayment, and what paying extra each month saves.
+  - Schedule, repayments (with an automatic interest/principal split), money received, details and history.
+  - Approval, receiving money, repaying, restructuring and reversing entries.
+  - A printable council statement (`/loans/print?id=`).
+- **The project page** shows a "Clear the loan" card, and the poster shows the countdown.
+
+### Documents, readings, guests & placements, personal collections
+
+- **Documents (`<Attachments>`):** on sermons, loans, projects, guest ministers, placements and collections. Drag files in or pick them; PDFs and images open in the browser.
+- **Sermons:**
+  - Readings in the church's tradition order, each with a reader (a member or a typed name), alongside the sermon text.
+  - The preacher can be a member, a typed name, or a guest from the register.
+  - The printed order of service lists the readings.
+- **People → Guests & placements (`/guests`):**
+  - **Guest ministers:** the register, upcoming visits, and confirm (rota + SMS), mark done (feedback, invite again?), pay facilitation and thank.
+  - **Placements:** students, their mentor, assignments, rating and report.
+  - **Printable documents:** a report for the institution and a letter of appreciation (`/guests/print?id=&doc=report|letter`).
+- **Giving → Personal collections (`/collections`):** collections for a person (send-offs, weddings, families in need): gifts and promises with receipts, thank-you SMS and the hand-over. Clearly marked as not church money.
 

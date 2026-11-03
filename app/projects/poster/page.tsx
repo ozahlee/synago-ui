@@ -4,11 +4,12 @@ import { Suspense, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useApi } from "@/lib/api"
+import { api, useApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { longDate, money, today } from "@/lib/format"
 import { useSettings } from "@/lib/settings"
-import type { Project, ProjectSummary } from "@/lib/types"
+import type { Loan, Project, ProjectSummary } from "@/lib/types"
+import useSWR from "swr"
 
 /** A printable progress poster for the notice board: thermometer, milestones, top cells and the honour roll. */
 function Poster() {
@@ -18,6 +19,8 @@ function Poster() {
   const settings = useSettings()
   const { data: p } = useApi<Project>(user && id ? `/projects/${id}` : null)
   const { data: s } = useApi<ProjectSummary>(user && id ? `/projects/${id}/summary` : null)
+  const { data: loans } = useSWR<{ data: Loan[] }>(user && id ? `/loans?projectId=${id}` : null, (k: string) => api<{ data: Loan[] }>(k))
+  const loan = loans?.data.find((l) => l.status === "active")
 
   useEffect(() => {
     if (!loading && !user) router.replace(`/login?next=${encodeURIComponent(`/projects/poster?id=${id}`)}`)
@@ -100,6 +103,17 @@ function Poster() {
               )}
             </div>
           </div>
+
+          {loan && (
+            <section className="mt-8 rounded-2xl border-2 border-primary/20 p-5">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Clearing the loan · {loan.lender}</h2>
+                <p className="text-sm"><b className="tabular">{money(loan.summary.principalPaid)}</b> repaid of {money(Math.max(loan.summary.disbursed, loan.principal))}</p>
+              </div>
+              <div className="mt-3 h-6 overflow-hidden rounded-full bg-success/20"><div className="ml-auto h-full rounded-full bg-primary" style={{ width: `${Math.max(0, 100 - loan.summary.progress)}%` }} /></div>
+              <p className="mt-2 text-sm text-muted-foreground">Still owed <b className="text-foreground">{money(loan.summary.outstanding + loan.summary.undrawn)}</b>{loan.summary.endDate ? ` · to be cleared by ${longDate(loan.summary.endDate)}` : ""}. Every gift to this project brings that day closer.</p>
+            </section>
+          )}
 
           {roll.length > 0 && (
             <section className="mt-8 border-t pt-6">

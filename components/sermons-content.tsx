@@ -21,13 +21,15 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { FieldError, runAction, str, useApiForm } from "@/components/form"
 import { MemberPicker } from "@/components/member-picker"
 import { ScriptureInput } from "@/components/scripture-input"
+import { ReadingsEditor, readingsPayload, type ReadingDraft } from "@/components/readings-editor"
+import { Attachments } from "@/components/attachments"
 import { del, patch, post, qs, useApi, usePaginated } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { useUrlParam } from "@/lib/use-url-param"
 import { LITURGICAL } from "@/lib/calendar"
 import { lastSunday, longDate, money, relativeDay, shiftDays, today } from "@/lib/format"
 import { useSettings } from "@/lib/settings"
-import type { Sermon, SermonSeries, SermonStats } from "@/lib/types"
+import type { Sermon, SermonSeries, SermonStats, GuestIndex } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const refresh = () => mutate((k) => typeof k === "string" && (k.startsWith("/sermons") || k.startsWith("/calendar")))
@@ -335,8 +337,23 @@ function SermonView({ id, canManage, onClose, onEdit }: { id: string; canManage:
               <div className="flex-1"><p className="font-semibold">{s.preacher}</p><p className="text-xs text-muted-foreground">{s.visiting ? `Visiting preacher${s.preacherChurch ? ` · ${s.preacherChurch}` : ""}` : "Preacher"}</p></div>
               {s.preacherPhone && <Button size="sm" variant="outline" asChild><a href={`tel:${s.preacherPhone}`}>Call</a></Button>}
             </div>
-            {s.scriptures.length > 0 && <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Passages</p><Passages refs={s.scriptures} /></div>}
+            {(s.readings?.length ?? 0) > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Readings</p>
+                <ol className="divide-y rounded-xl border text-sm">
+                  {s.readings!.map((r) => (
+                    <li key={r.role} className="flex items-center gap-3 px-3 py-2">
+                      <span className="w-28 shrink-0 text-xs font-medium text-muted-foreground">{r.label}</span>
+                      <span className="flex-1 font-medium">{r.ref}</span>
+                      {r.reader && <span className="text-xs text-muted-foreground">read by {r.reader}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {s.scriptures.length > 0 && <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sermon text</p><Passages refs={s.scriptures} /></div>}
             {s.notes && <div><p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notes</p><p className="whitespace-pre-line text-sm">{s.notes}</p></div>}
+            <Attachments type="sermon" id={s.id} canEdit={canManage} title="Sermon documents" suggestions={["Sermon notes", "Outline", "Slides", "Order of service"]} />
             {(s.attendance || s.offertory) && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border p-3"><p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5" /> Attendance</p><p className="text-lg font-semibold tabular">{s.attendance ?? "—"}</p></div>
@@ -363,6 +380,10 @@ function SermonDialog({ record, date, service, markPreached, series, onClose }: 
   const [newSeries, setNewSeries] = useState("")
   const [refs, setRefs] = useState<string[]>(record?.scriptures ?? [])
   const [visitingChurch, setVisitingChurch] = useState(record?.preacherChurch ?? "")
+  const [readings, setReadings] = useState<ReadingDraft[]>([])
+  const [preacherKind, setPreacherKind] = useState<"member" | "guest">(record?.preacherGuestId ? "guest" : "member")
+  const [guestId, setGuestId] = useState(record?.preacherGuestId ?? "")
+  const { data: guestIndex } = useApi<GuestIndex>(preacherKind === "guest" ? "/guests" : null)
 
   const { handleSubmit, pending, error } = useApiForm(async (fd) => {
     let sid = seriesId === "none" || seriesId === "new" ? null : Number(seriesId)
@@ -370,11 +391,14 @@ function SermonDialog({ record, date, service, markPreached, series, onClose }: 
       const r = await post<{ data: { id: string } }>("/sermons/series", { name: newSeries.trim() })
       sid = Number(r.data.id)
     }
-    const memberId = str(fd, "preacherMemberId")
+    const memberId = preacherKind === "member" ? str(fd, "preacherMemberId") : null
+    const guest = preacherKind === "guest" && guestId ? Number(guestId) : null
     const body = {
       date: str(fd, "date"), service: svc || null, status,
-      preacherMemberId: memberId ? Number(memberId) : null, preacherName: memberId ? null : str(fd, "preacherName"),
-      preacherChurch: memberId ? null : visitingChurch || null,
+      preacherMemberId: memberId ? Number(memberId) : null, preacherGuestId: guest,
+      preacherName: memberId || guest ? null : str(fd, "preacherName"),
+      preacherChurch: memberId || guest ? null : visitingChurch || null,
+      readings: readingsPayload(readings.length ? readings : (record?.readings ?? []).map((r) => ({ role: r.role, ref: r.ref, readerMemberId: r.readerMemberId, readerName: r.reader ?? "" })), fd),
       title: str(fd, "title"), theme: str(fd, "theme"), seriesId: sid, scriptures: refs,
       notes: str(fd, "notes"), recordingUrl: str(fd, "recordingUrl"),
     }
@@ -407,17 +431,36 @@ function SermonDialog({ record, date, service, markPreached, series, onClose }: 
               <SelectContent><SelectItem value="planned">Planned (rota)</SelectItem><SelectItem value="preached">Preached</SelectItem></SelectContent>
             </Select>
           </div>
-          <div className="space-y-2 sm:col-span-4">
-            <Label htmlFor="s-preacher">Preacher</Label>
-            <MemberPicker id="s-preacher" name="preacherMemberId" freeTextName="preacherName" placeholder="A member, or type a visiting preacher's name"
-              initial={record?.preacherMemberId ? { id: record.preacherMemberId, name: record.preacher } : null}
-              initialText={record?.visiting ? record.preacher : undefined} />
+          <div className="space-y-2 sm:col-span-6">
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="s-preacher">Preacher</Label>
+              <div className="flex gap-1 rounded-lg bg-muted p-0.5 text-xs">
+                {(["member", "guest"] as const).map((k) => (
+                  <button key={k} type="button" onClick={() => setPreacherKind(k)} className={cn("rounded-md px-2.5 py-1 font-medium", preacherKind === k ? "bg-card shadow-xs" : "text-muted-foreground")}>{k === "member" ? "Member / other" : "Guest minister"}</button>
+                ))}
+              </div>
+            </div>
+            {preacherKind === "member" ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-2">
+                  <MemberPicker id="s-preacher" name="preacherMemberId" freeTextName="preacherName" placeholder="A member, or type a visiting preacher's name"
+                    initial={record?.preacherMemberId ? { id: record.preacherMemberId, name: record.preacher } : null}
+                    initialText={record?.visiting && !record.preacherGuestId ? record.preacher : undefined} />
+                </div>
+                <Input aria-label="Visiting preacher's church" value={visitingChurch} onChange={(e) => setVisitingChurch(e.target.value)} placeholder="If visiting: church / diocese" />
+              </div>
+            ) : (
+              <Select value={guestId} onValueChange={(v) => v && setGuestId(v)}>
+                <SelectTrigger id="s-preacher" className="w-full"><SelectValue placeholder={guestIndex?.guests.length === 0 ? "No guest ministers yet: add them under People → Guests & placements" : "Choose a guest minister"} /></SelectTrigger>
+                <SelectContent>{(guestIndex?.guests ?? []).map((g) => <SelectItem key={g.id} value={g.id}>{g.fullName}{g.churchName ? ` · ${g.churchName}` : ""}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
           </div>
-          <div className="space-y-2 sm:col-span-2"><Label htmlFor="s-church">If visiting: from</Label><Input id="s-church" value={visitingChurch} onChange={(e) => setVisitingChurch(e.target.value)} placeholder="Church / diocese" /></div>
           <div className="space-y-2 sm:col-span-3"><Label htmlFor="s-theme">Theme</Label><Input id="s-theme" name="theme" defaultValue={record?.theme ?? ""} placeholder="e.g. Faith in hard times" /></div>
           <div className="space-y-2 sm:col-span-3"><Label htmlFor="s-title">Sermon title</Label><Input id="s-title" name="title" defaultValue={record?.title ?? ""} placeholder="e.g. Joy in trials" /></div>
+          <div className="sm:col-span-6"><ReadingsEditor initial={record?.readings} onChange={setReadings} error={(k) => error?.field(k)} /></div>
           <div className="space-y-2 sm:col-span-6">
-            <Label htmlFor="s-refs">Passages used</Label>
+            <Label htmlFor="s-refs">Sermon text (passages preached from)</Label>
             <ScriptureInput id="s-refs" value={refs} onChange={setRefs} />
             <FieldError error={error} name="scriptures.0" />
           </div>

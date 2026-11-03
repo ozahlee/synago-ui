@@ -80,6 +80,40 @@ export async function api<T = unknown>(path: string, init: { method?: string; bo
   return json as T
 }
 
+/** Upload a file (multipart). */
+export async function upload<T>(path: string, form: FormData): Promise<T> {
+  const token = getToken()
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}${path}`, { method: "POST", headers: { Accept: "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: form })
+  } catch {
+    throw new ApiError(0, `Cannot reach the server at ${API_URL}. Is the backend running?`)
+  }
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    if (res.status === 401 && token) onUnauthorized?.()
+    throw new ApiError(res.status, json.message ?? `Upload failed (${res.status})`, json.errors, json)
+  }
+  return json as T
+}
+
+/** Fetch a protected file and open it (PDF/images in a new tab) or save it (others). */
+export async function openFile(path: string, name: string, inline: boolean) {
+  const token = getToken()
+  const res = await fetch(`${API_URL}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!res.ok) throw new ApiError(res.status, res.status === 404 ? "That file is no longer available." : `Download failed (${res.status})`)
+  const url = URL.createObjectURL(await res.blob())
+  if (inline) {
+    window.open(url, "_blank", "noopener")
+  } else {
+    const a = document.createElement("a")
+    a.href = url
+    a.download = name
+    a.click()
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
 export const post = <T>(path: string, body?: Body) => api<T>(path, { method: "POST", body: body ?? {} })
 export const patch = <T>(path: string, body: Body) => api<T>(path, { method: "PATCH", body })
 export const put = <T>(path: string, body: Body) => api<T>(path, { method: "PUT", body })

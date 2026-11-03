@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { BannsTab, DayTab, MoneyTab, ReadinessTab, useWedding } from "@/components/wedding-tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -22,6 +23,7 @@ import { FieldError, bool, runAction, str, useApiForm } from "@/components/form"
 import { MemberPicker } from "@/components/member-picker"
 import { del, patch, post, qs, useApi, usePaginated } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import { Attachments, useAttachmentImage } from "@/components/attachments"
 import { useUrlParam } from "@/lib/use-url-param"
 import { longDate, relativeDay, today } from "@/lib/format"
 import { useSettings } from "@/lib/settings"
@@ -45,6 +47,8 @@ export function MarriagesContent() {
   useEffect(() => setPage(1), [period.range.from, period.range.to])
   const [selected, setSelected] = useState<Marriage | null>(null)
   const [dialog, setDialog] = useState<"new" | "edit" | "delete" | null>(null)
+  const [viewing, setViewing] = useState<Marriage | null>(null)
+  useUrlParam("open", (id) => setViewing({ id } as Marriage))
 
   useUrlParam("tab", (t) => (t === "scheduled" || t === "completed") && setTab(t))
   useUrlParam("q", setSearchInput)
@@ -69,11 +73,14 @@ export function MarriagesContent() {
         title="Marriages"
         description={usesBanns ? "Weddings being prepared (banns and counselling) and the church's marriage register." : "Weddings being prepared and the church's marriage register."}
         actions={
-          canManage && (
-            <Button onClick={() => setDialog("new")}>
-              <Plus className="size-4" /> Register a wedding
-            </Button>
-          )
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" asChild><Link href="/marriages/register" target="_blank"><Printer className="size-4" /> Print register</Link></Button>
+            {canManage && (
+              <Button onClick={() => setDialog("new")}>
+                <Plus className="size-4" /> Register a wedding
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -124,7 +131,7 @@ export function MarriagesContent() {
             </TableHeader>
             <TableBody>
               {rows.map((m) => (
-                <TableRow key={m.id}>
+                <TableRow key={m.id} className="cursor-pointer" onClick={() => setViewing(m)}>
                   {tab === "completed" && <TableCell className="font-mono text-xs text-muted-foreground">{m.certificateNumber}</TableCell>}
                   <TableCell>
                     <div className="flex items-center gap-3">
@@ -159,7 +166,7 @@ export function MarriagesContent() {
                     </TableCell>
                   )}
                   <TableCell className="hidden text-sm text-muted-foreground lg:table-cell">{m.officiant ?? "—"}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon-sm" aria-label="Actions">
@@ -205,6 +212,8 @@ export function MarriagesContent() {
         )}
       </TableCard>
 
+      {viewing && <MarriageView id={viewing.id} usesBanns={usesBanns} canManage={canManage} onClose={() => setViewing(null)}
+        onEdit={(m) => (setViewing(null), setSelected(m), setDialog("edit"))} onUpdate={(m, body, msg) => update(m, body, msg)} />}
       <MarriageDialog key="new" open={dialog === "new"} onOpenChange={(o) => !o && setDialog(null)} usesBanns={usesBanns} />
       {selected && (
         <>
@@ -333,6 +342,98 @@ function MarriageDialog({ record, open, onOpenChange, usesBanns }: { record?: Ma
             <Button type="submit" disabled={pending}>{pending ? "Saving…" : record ? "Save changes" : "Register wedding"}</Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** One marriage: the couple, the banns, the day, the official photo and its documents. */
+function MarriageView({ id, usesBanns, canManage, onClose, onEdit, onUpdate }: {
+  id: string; usesBanns: boolean; canManage: boolean; onClose: () => void; onEdit: (m: Marriage) => void
+  onUpdate: (m: Marriage, body: Record<string, unknown>, msg: string) => Promise<unknown> | void
+}) {
+  const { data: m, mutate: reload } = useApi<Marriage>(`/marriages/${id}`)
+  const photo = useAttachmentImage("marriage", m ? m.id : null)
+  const { data: w, refresh: refreshWedding } = useWedding(id)
+  const refresh = () => (refreshWedding(), reload())
+  const act = async (body: Record<string, unknown>, msg: string) => { if (m) { await onUpdate(m, body, msg); reload() } }
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-3xl">
+        {!m ? <><DialogTitle className="sr-only">Loading</DialogTitle><div className="m-6 h-60 animate-pulse rounded-xl bg-muted" /></> : (
+          <>
+            {photo ? (
+              <div className="relative">
+                <img src={photo} alt={`${m.groomName} and ${m.brideName}`} className="max-h-80 w-full rounded-t-lg object-cover" />
+                <div className="absolute inset-x-0 bottom-0 rounded-b-none bg-gradient-to-t from-black/70 to-transparent p-5 pt-16 text-white">
+                  <DialogTitle className="text-2xl font-semibold text-white">{m.groomName} &amp; {m.brideName}</DialogTitle>
+                  <DialogDescription className="text-white/80">{longDate(m.date)}{m.place ? ` · ${m.place}` : ""}</DialogDescription>
+                </div>
+              </div>
+            ) : (
+              <DialogHeader className="min-w-0 border-b p-6 pb-4 pr-12 text-left">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-gold/15 text-gold-foreground dark:text-gold"><Gem className="size-5" /></span>
+                  <div className="min-w-0">
+                    <DialogTitle className="text-xl">{m.groomName} &amp; {m.brideName}</DialogTitle>
+                    <DialogDescription>{longDate(m.date)}{m.place ? ` · ${m.place}` : ""}</DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+            )}
+            <Tabs defaultValue="overview" className="min-w-0 gap-0">
+              <div className="min-w-0 overflow-x-auto border-b px-4 pt-3 sm:px-6">
+                <TabsList>
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
+                  {usesBanns && <TabsTrigger value="banns">Banns</TabsTrigger>}
+                  <TabsTrigger value="readiness">Readiness</TabsTrigger>
+                  <TabsTrigger value="money">Money</TabsTrigger>
+                  <TabsTrigger value="day">The day</TabsTrigger>
+                </TabsList>
+              </div>
+              <TabsContent value="overview" className="min-w-0 space-y-5 p-4 pt-4 sm:p-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant={m.status === "completed" ? "success" : "info"}>{m.status === "completed" ? "Solemnised" : "Being prepared"}</Badge>
+                    {m.certificateNumber && <Badge variant="outline" className="font-mono">Register no. {m.certificateNumber}</Badge>}
+                    {!photo && <span className="text-xs text-muted-foreground">Add the official wedding photo below and it shows here.</span>}
+                  </div>
+                  <div className="grid gap-4 text-sm sm:grid-cols-3">
+                    {usesBanns && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Banns</p>
+                        <div className="mt-1 flex items-center gap-1.5">
+                          {[1, 2, 3].map((n) => <span key={n} className={cn("size-3 rounded-full", n <= m.bannsRead ? "bg-primary" : "bg-muted ring-1 ring-border")} />)}
+                          <span className="ml-1 font-medium tabular">{m.bannsRead} of 3 read</span>
+                        </div>
+                        {w?.nextBannsSunday && <p className="text-xs text-muted-foreground">Next: {longDate(w.nextBannsSunday)}</p>}
+                      </div>
+                    )}
+                    <div><p className="text-xs text-muted-foreground">Readiness</p><p className="font-medium">{w ? (w.ready ? "All ready" : `${w.readyCount} of ${w.readiness.length} ready`) : "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Time</p><p className="font-medium">{m.time ?? "—"}</p></div>
+                    <div><p className="text-xs text-muted-foreground">Officiating minister</p><p className="font-medium">{m.officiant ?? "—"}</p></div>
+                    <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Witnesses</p><p className="font-medium">{m.witnesses ?? "—"}</p></div>
+                  </div>
+                  {m.notes && <p className="whitespace-pre-line rounded-xl bg-muted px-3 py-2 text-sm">{m.notes}</p>}
+                  <Attachments type="marriage" id={m.id} canEdit={canManage} title="Wedding documents & photos"
+                    hint="Banns read (signed), the official wedding photo, notice of marriage, counselling certificate, the signed register copy"
+                    suggestions={["Official wedding photo", "Banns read", "Notice of marriage", "Counselling certificate", "Signed marriage certificate"]} />
+              </TabsContent>
+              {w && (
+                <>
+                  {usesBanns && <TabsContent value="banns" className="min-w-0 p-4 pt-4 sm:p-6"><BannsTab m={m} w={w} refresh={refresh} /></TabsContent>}
+                  <TabsContent value="readiness" className="min-w-0 p-4 pt-4 sm:p-6"><ReadinessTab m={m} w={w} refresh={refresh} /></TabsContent>
+                  <TabsContent value="money" className="min-w-0 p-4 pt-4 sm:p-6"><MoneyTab m={m} w={w} refresh={refresh} /></TabsContent>
+                  <TabsContent value="day" className="min-w-0 p-4 pt-4 sm:p-6"><DayTab key={w.programme.length} m={m} w={w} refresh={refresh} /></TabsContent>
+                </>
+              )}
+            </Tabs>
+            <DialogFooter className="flex-wrap gap-2 border-t p-4">
+              {canManage && m.status === "scheduled" && <Button variant="outline" onClick={() => act({ status: "completed" }, "Marriage added to the register").then(refresh)}><CheckCircle2 className="size-4" /> Mark solemnised</Button>}
+              <Button variant="outline" asChild><Link href={`/marriages/certificate?id=${m.id}`} target="_blank"><Printer className="size-4" /> Certificate</Link></Button>
+              {canManage && <Button onClick={() => onEdit(m)}><Pencil className="size-4" /> Edit</Button>}
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

@@ -18,6 +18,7 @@ import {
   Hash,
   User,
   Droplets,
+  Gem,
   FileText,
   BadgeCheck,
   Home,
@@ -37,7 +38,7 @@ import { FieldError, bool, num, str, useApiForm } from "@/components/form"
 import { VisitDialog, refreshCare } from "@/components/care-content"
 import { useAuth } from "@/lib/auth"
 import { CURRENCY, daysToBirthday, longDate, money, tenure, titleCase, today, yearsSince, date } from "@/lib/format"
-import { OFFERTORY_CATEGORIES, type Baptism, type Member, type Offertory, type OffertorySummary } from "@/lib/types"
+import { OFFERTORY_CATEGORIES, type Baptism, type Member, type Offertory, type OffertorySummary, type Marriage } from "@/lib/types"
 import { rite, useSettings } from "@/lib/settings"
 import { cn } from "@/lib/utils"
 
@@ -317,12 +318,13 @@ function CheckRow({ id, name, label, hint, defaultChecked, disabled }: { id: str
 function Sacraments({ memberId }: { memberId: string }) {
   const settings = useSettings()
   const { rows, isLoading } = usePaginated<Baptism>(qs("/baptisms", { memberId, perPage: 10, page: 1 }))
+  const { rows: marriages } = usePaginated<Marriage>(qs("/marriages", { memberId, perPage: 5, page: 1 }))
   if (isLoading) return null
 
   return (
     <section>
       <SectionTitle>Sacraments</SectionTitle>
-      {rows.length === 0 ? (
+      {rows.length === 0 && marriages.length === 0 ? (
         <p className="text-sm text-muted-foreground">No baptism or confirmation recorded for this member.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2">
@@ -342,6 +344,20 @@ function Sacraments({ memberId }: { memberId: string }) {
                     {b.officiant ? ` · ${b.officiant}` : ""}
                   </p>
                 </div>
+              </li>
+            )
+          })}
+          {marriages.map((m) => {
+            const spouse = m.groomMemberId === memberId ? m.brideName : m.groomName
+            return (
+              <li key={`m-${m.id}`}>
+                <a href={`/marriages?open=${m.id}`} className="flex items-center gap-3 rounded-xl border px-3 py-2.5 transition hover:border-primary/30">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold-foreground dark:text-gold"><Gem className="size-4" /></span>
+                  <div className="min-w-0 text-sm">
+                    <p className="font-semibold">{m.status === "completed" ? `Married to ${spouse}` : `Engaged to ${spouse}`}</p>
+                    <p className="truncate text-xs text-muted-foreground">{m.status === "completed" ? "" : "Wedding "}{longDate(m.date)}{m.place ? ` · ${m.place}` : ""}</p>
+                  </div>
+                </a>
               </li>
             )
           })}
