@@ -88,3 +88,9 @@ Lists and reports share one period picker (`components/period-filter.tsx`, `lib/
 - The app shows a banner until the admin confirms their email, and another in the last 7 days of the trial.
 - `/platform`: the Synago owner's console (platform admins only). It shows churches with status, trial, administrator, members and staff counts, and last use, and lets you mark a church active, extend its trial or suspend it.
 
+### Dashboard
+
+The dashboard starts with **Needs attention**: the items your role can act on, most urgent first, each linking to the filtered page that resolves it (e.g. `/pledges?status=overdue`, `/attendance?date=…`, `/care?tab=visits`). Next to it is **Last Sunday**: attendance and giving per service, with week-on-week and year-on-year change.
+
+Quick actions and figures follow the user's permissions. The treasurer sees money first, everyone else sees people first, and nobody sees figures for a page they can't open.
+

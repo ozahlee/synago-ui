@@ -46,6 +46,7 @@ export function PledgesContent() {
   const [selected, setSelected] = useState<Pledge | null>(null)
   const [dialog, setDialog] = useState<"new" | "edit" | "pay" | "delete" | null>(null)
 
+  useUrlParam("status", (v) => ["open", "overdue", "fulfilled", "all"].includes(v) && setStatus(v))
   useUrlParam("q", (q) => {
     setSearchInput(q)
     setStatus("all")

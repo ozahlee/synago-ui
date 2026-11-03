@@ -16,6 +16,7 @@ import { lastSunday, longDate, shiftDays, today } from "@/lib/format"
 import type { AttendanceDay, AttendanceRow, AttendanceTrends } from "@/lib/types"
 import { usePeriod } from "@/lib/period"
 import { PeriodFilter } from "@/components/period-filter"
+import { useUrlParam } from "@/lib/use-url-param"
 
 const FIELDS = ["men", "women", "children", "visitors"] as const
 
@@ -23,6 +24,7 @@ export function AttendanceContent() {
   const { can } = useAuth()
   const canEdit = can("members.manage")
   const [day, setDay] = useState(lastSunday())
+  useUrlParam("date", (d) => /^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today() && setDay(d))
   const { data } = useApi<AttendanceDay>(qs("/attendance/day", { date: day }))
   const period = usePeriod("this_year")
   const { data: trends } = useApi<AttendanceTrends>(qs("/attendance/trends", { from: period.range.from ?? undefined, to: period.range.to ?? undefined }))

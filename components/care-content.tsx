@@ -25,6 +25,7 @@ import { CARE_TYPES, VISIT_TYPES, type CareCase, type CareStats, type CareType, 
 import { cn } from "@/lib/utils"
 import { usePeriod } from "@/lib/period"
 import { PeriodFilter, periodParams } from "@/components/period-filter"
+import { useUrlParam } from "@/lib/use-url-param"
 
 export const refreshCare = () => mutate((k) => typeof k === "string" && (k.startsWith("/care") || k.startsWith("/members") || k.startsWith("/welfare") || k.startsWith("/announcements")))
 
@@ -43,6 +44,8 @@ export function CareContent() {
   const [status, setStatus] = useState("open")
   const [page, setPage] = useState(1)
   const [vpage, setVpage] = useState(1)
+  const [tab, setTab] = useState("cases")
+  useUrlParam("tab", (t) => (t === "cases" || t === "visits") && setTab(t))
   const [selected, setSelected] = useState<CareCase | null>(null)
   const [dialog, setDialog] = useState<"case" | "edit" | "visit" | "delete" | null>(null)
   const [visitFor, setVisitFor] = useState<CareCase | null>(null)
@@ -94,7 +97,7 @@ export function CareContent() {
         </Card>
       )}
 
-      <Tabs defaultValue="cases" className="gap-4">
+      <Tabs value={tab} onValueChange={setTab} className="gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <TabsList>
             <TabsTrigger value="cases">Cases</TabsTrigger>

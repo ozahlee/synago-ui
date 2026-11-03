@@ -148,18 +148,38 @@ export type Notification = {
 }
 
 
+/** People figures are null without members.view, money figures null without finance.view. */
 export type DashboardStats = {
-  totalMembers: number
-  membersChange: number
-  activeMembers: number
+  totalMembers: number | null
+  membersChange: number | null
+  activeMembers: number | null
   attendanceRate: number | null
-  sundaySchool: number
+  sundaySchool: number | null
   sundaySchoolClasses: number | null
-  monthlyOffertory: number
-  offertoryChange: number
-  membershipByGender: { male: number; female: number }
+  monthlyOffertory: number | null
+  offertoryChange: number | null
+  membershipByGender: { male: number; female: number } | null
   offertoryTrends: Array<{ month: string; tithe: number; pledge: number; thanksgiving: number; harvest: number }>
   recentActivities: Array<{ id: string; name: string; action: string; time: string }>
+}
+
+export type AttentionItem = {
+  key: string
+  area: "care" | "registers" | "money" | "admin"
+  severity: "danger" | "warning" | "info"
+  title: string
+  detail: string | null
+  count: number
+  href: string
+}
+export type SundaySnapshot = {
+  date: string
+  previousDate: string
+  lastYearDate: string
+  showAttendance: boolean
+  showGiving: boolean
+  services: Array<{ service: string; attendance: number | null; attendancePrev: number | null; visitors: number | null; giving: number | null; givingPrev: number | null }>
+  totals: { attendance: number | null; attendancePrev: number | null; attendanceLastYear: number | null; visitors: number | null; giving: number | null; givingPrev: number | null; givingLastYear: number | null }
 }
 
 export const PAYMENT_METHODS = ["Cash", "Mobile Money", "Bank Transfer", "Cheque"] as const

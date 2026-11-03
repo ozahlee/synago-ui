@@ -7,10 +7,11 @@ import "./globals.css"
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-dm-sans", display: "swap", axes: ["opsz"] })
 
 export const metadata: Metadata = {
-  title: `${process.env.NEXT_PUBLIC_CHURCH_NAME ?? "Synago"} · Church Admin`,
+  title: "Synago · Church office",
   description: "Synago church management",
   icons: {
     icon: [
+      { url: "/favicon.ico", sizes: "any" },
       { url: "/icon-light-32x32.png", media: "(prefers-color-scheme: light)" },
       { url: "/icon-dark-32x32.png", media: "(prefers-color-scheme: dark)" },
       { url: "/icon.svg", type: "image/svg+xml" },
