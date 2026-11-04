@@ -26,8 +26,10 @@ import {
   HeartHandshake,
 } from "lucide-react"
 import { PersonAvatar } from "@/components/page"
-import { post, qs, useApi, usePaginated } from "@/lib/api"
+import { photoSrc, post, qs, useApi, usePaginated } from "@/lib/api"
+import { PhotoUpload } from "@/components/photo-upload"
 import { useState } from "react"
+import { mutate } from "swr"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,21 +43,15 @@ import { CURRENCY, daysToBirthday, longDate, money, tenure, titleCase, today, ye
 import { OFFERTORY_CATEGORIES, type Baptism, type Member, type Offertory, type OffertorySummary, type Marriage } from "@/lib/types"
 import { rite, useSettings } from "@/lib/settings"
 import { cn } from "@/lib/utils"
+import { whatsappNumber } from "@/lib/contact"
+
+const SERVICE_END: Record<string, string> = { completed: "Completed term", resigned: "Resigned", died: "Called to glory", removed: "Removed", promoted: "Promoted", moved: "Moved", other: "Ended" }
 
 /** "5 March" — day and month only. */
 function birthdayLabel(dob: string | null) {
   if (!dob) return "—"
   const [y, m, d] = dob.slice(0, 10).split("-").map(Number)
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: "numeric", month: "long" })
-}
-
-const COUNTRY_CODE = process.env.NEXT_PUBLIC_PHONE_COUNTRY_CODE ?? "256"
-
-/** "0772 123456" → "256772123456" for wa.me links. */
-function whatsappNumber(phone: string) {
-  const digits = phone.replace(/\D/g, "")
-  if (phone.trim().startsWith("+")) return digits
-  return digits.startsWith("0") ? COUNTRY_CODE + digits.slice(1) : digits
 }
 
 type ViewMemberDialogProps = {
@@ -70,6 +66,8 @@ export function ViewMemberDialog({ member: listed, open, onOpenChange, onEdit }:
   // The list row is enough to open instantly; the full record adds positions etc.
   const { data: full } = useApi<Member>(open ? `/members/${listed.id}` : null)
   const member = full ?? listed
+  const [photo, setPhoto] = useState<string | null | undefined>(undefined)
+  const photoUrl = photo === undefined ? member.photoUrl : photo
   const deceased = member.status === "deceased"
   const [action, setAction] = useState<"death" | "visit" | null>(null)
   const age = yearsSince(member.dateOfBirth)
@@ -85,7 +83,13 @@ export function ViewMemberDialog({ member: listed, open, onOpenChange, onEdit }:
         <div className={cn("relative overflow-hidden rounded-t-2xl px-6 pb-6 pt-8 text-primary-foreground", deceased ? "bg-foreground" : "bg-primary")}>
           <div aria-hidden className="pointer-events-none absolute -right-16 -top-20 size-64 rounded-full bg-fuchsia-300/20 blur-3xl" />
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center">
-            <PersonAvatar name={member.name} className="size-16 bg-card text-lg ring-4 ring-primary-foreground/20" />
+            <div className="flex flex-col items-start gap-2">
+              {photoSrc(photoUrl)
+                ? <img src={photoSrc(photoUrl)!} alt={member.name} className="h-24 w-[77px] rounded-lg bg-card object-cover object-top ring-4 ring-primary-foreground/20" />
+                : <PersonAvatar name={member.name} className="size-16 bg-card text-lg ring-4 ring-primary-foreground/20" />}
+              {can("members.manage") && <PhotoUpload memberId={member.id} hasPhoto={!!photoUrl} compact className="text-primary-foreground [&_button]:text-primary-foreground [&_button:hover]:bg-primary-foreground/15"
+                onChange={(u) => { setPhoto(u); mutate((k) => typeof k === "string" && (k.startsWith("/members") || k.startsWith("/council"))) }} />}
+            </div>
             <div className="min-w-0 flex-1">
               <DialogTitle className="text-2xl text-primary-foreground">{member.name}</DialogTitle>
               <DialogDescription className="mt-1 text-primary-foreground/75">
@@ -216,12 +220,30 @@ export function ViewMemberDialog({ member: listed, open, onOpenChange, onEdit }:
                   <span key={i} className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1 text-sm font-medium">
                     <BadgeCheck className="size-3.5 text-gold-foreground dark:text-gold" /> {p.title}
                     <span className="font-normal text-muted-foreground">· {p.scope}{p.startDate ? ` since ${new Date(p.startDate).getFullYear()}` : ""}</span>
+                    {p.acting && <span className="rounded bg-info/10 px-1 text-[11px] text-info">acting</span>}
+                    {p.suspended && <span className="rounded bg-destructive/10 px-1 text-[11px] text-destructive">suspended</span>}
                   </span>
                 ))}
                 {member.cellGroup && <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"><Home className="size-3.5 text-primary" /> {member.cellGroup}</span>}
                 {member.household && <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"><HeartHandshake className="size-3.5 text-primary" /> {member.household}</span>}
                 {member.sundaySchoolClass && <span className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm"><GraduationCap className="size-3.5 text-primary" /> Sunday school: {member.sundaySchoolClass}</span>}
               </div>
+            </section>
+          )}
+
+          {(member.positions ?? []).some((p) => !p.current) && (
+            <section>
+              <SectionTitle>Service history</SectionTitle>
+              <ul className="space-y-1.5 text-sm">
+                {member.positions!.filter((p) => !p.current).map((p, i) => (
+                  <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="font-medium">{p.title}</span>
+                    <span className="text-muted-foreground">{p.scope} · {p.startDate ? new Date(p.startDate).getFullYear() : "?"}–{p.endDate ? new Date(p.endDate).getFullYear() : ""}</span>
+                    {p.endReason && <span className="rounded bg-muted px-1.5 text-[11px] text-muted-foreground">{SERVICE_END[p.endReason] ?? "Ended"}{p.movedTo ? ` → ${p.movedTo}` : ""}</span>}
+                    {p.endNote && <span className="w-full text-xs italic text-muted-foreground">{p.endNote}</span>}
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 

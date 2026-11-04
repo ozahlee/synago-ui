@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { MemberFormDialog } from "@/components/member-form-dialog"
 import { ViewMemberDialog } from "@/components/view-member-dialog"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { ContactIcons } from "@/components/contact-buttons"
 import { EmptyState, PersonAvatar, StatusBadge, TableCard, TableSkeleton } from "@/components/page"
 import { Pager } from "@/components/pager"
 import { runAction } from "@/components/form"
@@ -83,7 +84,7 @@ export function MembersTable({ searchQuery, filterGender, filterStatus, engageme
                   <TableRow key={member.id} className="cursor-pointer" onClick={() => open(member, "view")}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <PersonAvatar name={member.name} className="size-10" />
+                        <PersonAvatar name={member.name} photoUrl={member.photoUrl} className="size-10" />
                         <div className="min-w-0">
                           <p className="flex items-center gap-1.5 font-semibold">
                             {member.name}
@@ -114,7 +115,8 @@ export function MembersTable({ searchQuery, filterGender, filterStatus, engageme
                       ) : (
                         <span className="text-sm text-muted-foreground">—</span>
                       )}
-                      {member.email && <p className="max-w-52 truncate text-xs text-muted-foreground">{member.email}</p>}
+                      {member.email && <a href={`mailto:${member.email}`} onClick={(e) => e.stopPropagation()} className="block max-w-52 truncate text-xs text-muted-foreground hover:text-primary">{member.email}</a>}
+                      <ContactIcons phone={member.phone} email={member.email} size="xs" className="mt-1" />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       {place ? (

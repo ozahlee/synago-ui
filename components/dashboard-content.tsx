@@ -22,11 +22,6 @@ import { useAuth } from "@/lib/auth"
 import { money } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-function greeting() {
-  const h = new Date().getHours()
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"
-}
-
 const todayLabel = () => new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
 
 type View = "pastor" | "treasurer" | "office"
@@ -78,7 +73,7 @@ function useViews(): { views: View[]; fallback: View } {
  * the chosen view works with. Every block is shown only to roles that may open the page behind it.
  */
 export function DashboardContent() {
-  const { user, can } = useAuth()
+  const { can } = useAuth()
   const router = useRouter()
   const people = can("members.view")
   const finance = can("finance.view")
@@ -88,7 +83,6 @@ export function DashboardContent() {
   }, [broad, can, router])
   const { data: stats, error } = useApi<DashboardStats>(broad ? "/dashboard" : null)
   const { data: health } = useApi<DashboardHealth>(broad ? "/dashboard/health" : null, { refreshInterval: 5 * 60_000 })
-  const firstName = user?.name.split(" ")[0]
   const [changes, setChanges] = useState(false)
   const { views, fallback } = useViews()
   const [picked, setPicked] = useState<View | null>(null)
@@ -98,7 +92,6 @@ export function DashboardContent() {
   const cfg = VIEWS[view]
   const cards = health?.cards ? cfg.cards.map((k) => health.cards.find((c) => c.key === k)).filter((c): c is HealthCard => !!c) : undefined
 
-  const greet = `${greeting()}${firstName ? `, ${firstName}` : ""}`
   const switcher = views.length > 1 && (
     <div role="radiogroup" aria-label="Dashboard view" className="inline-flex shrink-0 rounded-lg border bg-card p-0.5 text-xs shadow-soft">
       {views.map((v) => (
@@ -120,7 +113,7 @@ export function DashboardContent() {
 
   return (
     <Page className="space-y-6">
-      <DashboardHeader greet={greet} switcher={switcher} actions={<QuickActions view={view} />} />
+      <DashboardHeader switcher={switcher} actions={<QuickActions view={view} />} />
       {broad && <VerdictBanner verdict={health?.verdict} status={health?.dataStatus} onChanges={() => setChanges(true)} />}
       <StickyVerdict verdict={health?.verdict} switcher={switcher} />
 
@@ -152,17 +145,18 @@ export function DashboardContent() {
   )
 }
 
-/** Date, the church season (its liturgical colour), the greeting; the view switch and the main action. */
-function DashboardHeader({ greet, switcher, actions }: { greet: string; switcher: React.ReactNode; actions: React.ReactNode }) {
+/** Date and the church season (its liturgical colour); the view switch and the main action. The verdict below does the talking. */
+function DashboardHeader({ switcher, actions }: { switcher: React.ReactNode; actions: React.ReactNode }) {
   const t = new Date()
   const iso = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`
   const { data: cal } = useApi<CalendarRange>(qs("/calendar", { from: iso, to: iso, kinds: "event" }), { revalidateOnFocus: false })
   const season = cal?.feasts[0] ?? cal?.season ?? cal?.seasons[0] ?? null
   const colour = season ? LITURGICAL[season.colour].bg : null
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
+    <header className="flex flex-wrap items-center justify-between gap-4">
+      <h1 className="sr-only">Overview</h1>
       <div className="min-w-0">
-        <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        <p className="flex flex-wrap items-center gap-2 text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
           {todayLabel()}
           {season && (
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-2 py-0.5 text-[11px] normal-case tracking-normal text-foreground">
@@ -171,7 +165,6 @@ function DashboardHeader({ greet, switcher, actions }: { greet: string; switcher
             </span>
           )}
         </p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">{greet}</h1>
       </div>
       <div className="flex flex-wrap items-center gap-2">{switcher}{actions}</div>
       {colour && <div aria-hidden className="h-1 w-full rounded-full opacity-80" style={{ background: `linear-gradient(90deg, ${colour}, transparent 70%)` }} />}

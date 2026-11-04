@@ -42,6 +42,8 @@ export type PlatformStats = { churches: number; trial: number; active: number; s
 
 export type Member = {
   id: string
+  /** Signed link to the passport photo (relative to the API origin), or null. */
+  photoUrl?: string | null
   /** Pledge / envelope number, e.g. "SJW-0042" */
   pledgeNumber: string | null
   name: string
@@ -60,7 +62,8 @@ export type Member = {
   householdId?: string | null
   household?: string | null
   nextOfKin?: { name: string | null; relationship: string | null; phone: string | null; memberId: string | null }
-  positions?: Array<{ title: string; scope: string; startDate: string | null; current: boolean }>
+  positions?: Array<{ title: string; scope: string; startDate: string | null; endDate?: string | null; current: boolean; acting?: boolean
+    endReason?: string | null; endNote?: string | null; movedTo?: string | null; suspended?: boolean; council?: boolean }>
   address: string | null
   village: string | null
   parish: string | null
@@ -1117,3 +1120,38 @@ export type SalesSummary = {
   inKind: { realised: number; estimated: number }
   events: string[]
 }
+
+export type CouncilHolder = {
+  positionId: string; memberId: string; name: string; phone: string | null; photoUrl: string | null
+  email: string | null; address: string | null
+  endReason: "completed" | "resigned" | "died" | "removed" | "promoted" | "moved" | "other" | null; endNote: string | null
+  movedTo: { title: string; startDate: string | null } | null
+  suspension: { id: string; since: string; until: string | null; reason: string } | null
+  suspensions: Array<{ id: string; since: string; until: string | null; reason: string }>
+  startDate: string | null; endDate: string | null; acting: boolean; term: number; overLimit: boolean; endsSoon: boolean
+  /** Set on ex officio seats: the office the person holds that puts them here. */
+  via: string | null
+}
+export type CouncilOffice = {
+  id: string; title: string; reportsTo: string | null; filledBy: "elected" | "appointed" | "ex_officio"
+  seats: number; termYears: number | null; maxTerms: number | null; note: string | null
+  exOfficioOf: { id: string; title: string; body: string | null } | null
+  holders: CouncilHolder[]; vacant: number
+}
+export type CouncilBody = {
+  id: string; name: string; kind: "clergy" | "council" | "committee" | "organisation" | "board"; parentId: string | null
+  description: string | null; sort: number; ministry: { id: string; name: string } | null
+  offices: CouncilOffice[]
+  stats: { seats: number; vacant: number; endingSoon: number; chair: string | null }
+}
+export type Council = { asOf: string; bodies: CouncilBody[]; templates: Record<string, string> | null }
+
+export type CouncilCheck = {
+  type: "ending" | "vacant" | "limit" | "conflict" | "load" | "suspended" | "accessMissing" | "accessStale"
+  severity: "danger" | "warning" | "info"
+  title: string; detail: string
+  officeId: string | null; bodyId: string | null; memberId: string | null; date: string | null
+  userId?: string | null; role?: string
+}
+
+export type CouncilEvent = { date: string; kind: "joined" | "acting" | "completed" | "resigned" | "died" | "removed" | "promoted" | "moved" | "other" | "suspended" | "reinstated"; text: string; seat: string; note: string | null }

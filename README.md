@@ -93,7 +93,7 @@ Lists and reports share one period picker (`components/period-filter.tsx`, `lib/
 The dashboard is built for deciding, not just reading figures.
 
 **Layout:** one 12-column grid. The left 8 columns are for deciding: health cards, the queue and giving through the year. The right 4 are context: last Sunday, the week ahead, engagement and people to call.
-- **Header:** the date, a chip with the church season in its liturgical colour and a matching stripe, the view switch, and one main action with a **Record ▾** menu for the rest.
+- **Header:** no greeting; the date, a chip with the church season in its liturgical colour and a matching stripe, the view switch, and one main action with a **Record ▾** menu for the rest.
 - **Verdict banner:** full width, tinted by tone, with "Updated…" and "What changed". A slim copy sticks to the top once you scroll.
 - **Health cards:** every card has the same rows (label, value, trend line, comparison, cause), so they line up. Colour appears only for *Watch* or *Act now*.
 - **Missing Sunday records** show once, as **Record** links in the Last Sunday card.
@@ -131,6 +131,31 @@ The dashboard is built for deciding, not just reading figures.
   The view is picked from the user's permissions. Anyone with more than one role can switch (remembered per browser), and the queue's "+N others" shows the rest.
 
 Every figure follows the user's permissions: nobody sees figures for a page they can't open.
+
+### Church council
+
+*People → Church council* (`/council`) shows the council as an organogram: a tree of the clergy, the Parish Church Council, its committees and the church's organisations.
+- **Photos:** each card shows the holder's passport photo and full name (smaller photos when a seat has several people), and a vacant seat shows an empty passport frame. Add or change a photo from the member's profile or straight from the seat dialog. Any photo works: the server crops it.
+- **Seats:** each card shows the holders, **Vacant**, *Ex officio* (filled by whoever holds another seat), ⌛ when a term ends within 3 months, *Acting* and *Over term limit*. Seats with nobody under them stack in a column, so wide councils stay readable.
+- **Seat dialog:** current holders with phone numbers, the history of the seat, **Fill the seat** (the end date defaults to the term length), **End term**, and editing the seat.
+- **As at:** shows the council on any date.
+- **Checks:** a summary chip ("10 terms ending, nobody lined up · 9 vacancies · 3 access") opens a panel with four groups:
+  - **terms ending;**
+  - **app access:** a former treasurer who can still see the books, or a new one without access, with a link to Staff & access;
+  - **governance:** over the term limit, two officer seats held by one person, or one person in too many seats;
+  - **vacant seats.**
+
+  Each item opens its seat. The same checks appear on the dashboard queue for the secretary and admin.
+- **Changes to a holder:** a **Change ▾** menu on each holder in the seat dialog offers:
+  - **Promote or move…** to another seat. The old term ends the day before and the two are linked ("Promoted → Vice chairperson").
+  - **Suspend…** with a reason and optional end date. The card greys their photo and shows *Suspended*, and **Fill the seat → Acting** names someone to stand in. The suspension can be lifted later.
+  - **End term**, with a reason: completed, resigned, died or removed (removal needs the council resolution or reason) and a note.
+
+  Recording a death on the member's profile ends their seats automatically.
+- **History:** the seat's *Before and after* list shows each past holder's reason (Resigned, Called to glory ✝, Removed, Promoted → …), notes and suspensions. A **Recent changes** feed sits under the structure, and the member's profile has a **Service history**.
+- **Contacts view:** everyone in a seat, with their photo, phone, email and address, plus call, WhatsApp and email buttons. You can search it, filter by body, **copy all phones or emails**, or download a **CSV**. The seat cards and dialogs have call, WhatsApp and email buttons, and every phone, email and address can be copied. The members list has the same quick buttons.
+- **Phones:** the chart becomes an indented list.
+- **Print:** `/council/print` prints an A4 landscape organogram, one section per body, with the church name and season colour.
 
 ### Requisitions and items & sales
 

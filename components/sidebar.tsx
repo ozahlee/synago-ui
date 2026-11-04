@@ -51,6 +51,7 @@ import {
   Building2,
   ClipboardList,
   ShoppingBag,
+  Network,
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -88,6 +89,7 @@ export const NAVIGATION: NavItem[] = [
   { name: "Cell groups", href: "/cell-groups", icon: HomeIcon, permission: "members.view", group: "People" },
   { name: "Areas", href: "/areas", icon: Map, permission: "members.view", group: "People" },
   { name: "Ministries", href: "/ministries", icon: UsersRound, permission: "members.view", group: "People" },
+  { name: "Church council", href: "/council", icon: Network, permission: "members.view", group: "People" },
   { name: "Positions", href: "/positions", icon: BadgeCheck, permission: "members.view", group: "People" },
   { name: "Guests & placements", href: "/guests", icon: Mic2, permission: "members.view", group: "People" },
 

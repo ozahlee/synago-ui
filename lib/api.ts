@@ -5,6 +5,9 @@ import useSWR, { type SWRConfiguration } from "swr"
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1").replace(/\/$/, "")
 const TOKEN_KEY = "synago.token"
 
+/** Full address of a signed photo link from the API (they are relative so they work on any host). */
+export const photoSrc = (url: string | null | undefined) => (url ? `${new URL(API_URL).origin}${url}` : null)
+
 export type Paginated<T> = {
   data: T[]
   meta: { current_page: number; last_page: number; per_page: number; total: number; from: number | null; to: number | null }

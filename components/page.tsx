@@ -2,7 +2,8 @@
 
 import type { LucideIcon } from "lucide-react"
 import { ArrowDownRight, ArrowUpRight } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { photoSrc } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
@@ -185,11 +186,13 @@ const AVATAR_TINTS = [
 ]
 
 /** Avatar with a stable colour picked from the person's name. */
-export function PersonAvatar({ name, className }: { name: string; className?: string }) {
+export function PersonAvatar({ name, className, photoUrl }: { name: string; className?: string; photoUrl?: string | null }) {
   let h = 0
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  const src = photoSrc(photoUrl)
   return (
     <Avatar className={cn("size-9", className)}>
+      {src && <AvatarImage src={src} alt={name} className="object-cover object-top" />}
       <AvatarFallback className={cn("font-semibold", AVATAR_TINTS[h % AVATAR_TINTS.length])}>{initials(name) || "?"}</AvatarFallback>
     </Avatar>
   )
