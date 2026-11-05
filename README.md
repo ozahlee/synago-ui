@@ -47,7 +47,8 @@ Sign in with the seeded admin: `admin@synago.test` / `password`.
 | Profile | Edit your own details, change password, see your permissions |
 | Staff & access | Admin: add/edit staff, assign roles, disable sign-in, role × permission matrix |
 | Church settings | Admin: church name, tradition, diocese, Sunday services, pledge-number prefix |
-| Attendance | Sunday head count per service (men / women / children / visitors), 12-week chart, attendance rate on the dashboard |
+| Attendance | Sunday head count per service (men, women, children, visitors), a chart, and the **Attendance report**: every Sunday by service and group, the change from the week before, averages, CSV, and a printable A4 report (by service, Sunday by Sunday, adult gender split, plus the Sunday school summary) at `/attendance/report?from=&to=` |
+| Sunday school by service | Each class's register is per service. The class has a usual service, and the register shows boys, girls and total as you tick, plus *children not on the roll* (boys and girls). The **Report** on the Sunday school page shows each class by service with the boys/girls split, the total and the average, then Sunday by Sunday, with CSV and print |
 | Marriages | Each wedding has a full page with five tabs. **Banns:** three dated readings with objections and their resolution, plus a printable notice or certificate of banns. **Readiness:** a checklist drawn from the registers plus hand ticks, and counselling sessions. **Money:** church fees, paid as income, and the couple's contributions collection, kept off the books. **The day:** order of service and run sheet, booking the calendar and venue with clash warnings, then forming a family. Weddings still needing banns appear on the printed Sunday programme. Also: the printable marriage register by year (`/marriages/register`), the marriage shown on the member's profile, the official photo on the certificate, and anniversary greetings |
 | Visitors | First-time guests, 4-step follow-up checklist, contact log, prayer requests, "Make member" |
 | Cell groups | Home fellowships by village, leaders/hosts, "Group by village" to place unassigned members |
@@ -92,6 +93,34 @@ Lists and reports share one period picker (`components/period-filter.tsx`, `lib/
 
 The dashboard is built for deciding, not just reading figures.
 
+**Church position:** the banner at the top answers "where do we stand right now?"
+- **Headline:** money free to spend (cash, mobile money and bank, less funds held for projects and welfare), and what is left once the next 30 days' commitments are paid: payroll (unpaid runs, or this month estimated from the last one), NSSF and PAYE, loans, approved requisitions, and guest and placement costs. A shortfall turns it red ("Short by …"); click to see the list. It opens by itself in the treasurer view.
+- **Underneath:** last Sunday (in church and collected, each against the Sunday before), this month's money in against money out, and the most serious item from the queue. Every part links to its evidence.
+- **Office view:** no money. It leads with last Sunday, then what hasn't been recorded yet and the most serious non-money item.
+- **Scrolling:** a slim sticky bar keeps the headline in sight.
+
+**At a glance:** under the banner is a strip of six compact tiles: Collection (Sunday offertory this year), Expenses, Bank & cash (with what is free to spend), Projects, Members and Attendance. Each has its figure, the change, a one-line note and a mini trend, and each view orders them for that role. The office view sees only Members and Attendance. Payroll, council, care and Sunday school have their own pages and stay off the dashboard.
+
+**Charts:**
+- **Money in & out:** all income against expenses, month by month this financial year. It uses soft curves with a blurred haze and gradient fills, and shows the surplus or deficit so far.
+- **Available balance:** every cash, mobile-money and bank account, what is held for projects and welfare, and what is free to spend.
+- **Where the money comes from** and **What's consuming the money:** donuts by income and expense account (top five plus Other) with the total in the middle.
+- **Projects:** per open project, raised against target and spent against budget; overspending shows in red.
+- **Attendance by service:** a stacked area over 12 Sundays.
+
+The treasurer view adds slim money cards (free to spend, payments due, cash not banked). The queue shows the top 5 with *See all*, and Last Sunday is a slim card with mini bars per service.
+
+**Presentation mode** (`/present`, the **Present** button on the dashboard) is a full-screen slideshow for a projector or TV, with no sidebar. It has these slides:
+- **At a glance:** the verdict and the tiles.
+- **Collections & spending:** money in & out and the income donut.
+- **Where the money goes:** the expense donut and the project breakdown. Bank balances are never shown on the public screen.
+- **Worship:** attendance by service plus last Sunday's figures.
+- **Projects:** progress rings.
+- **Our leadership:** council officers with photos; a suspended holder gives way to whoever is acting.
+- **This week.**
+
+Slides advance every 14 seconds with a progress bar. ← → move between slides, Space pauses, F goes full screen and Esc leaves. The controls and cursor hide after 3 seconds without movement. It's safe on a shared screen: it never shows the to-do queue, keeps only the church-wide parts of the verdict, and each slide appears only for users who may see it. The background takes the colour of the church season.
+
 **Layout:** one 12-column grid. The left 8 columns are for deciding: health cards, the queue and giving through the year. The right 4 are context: last Sunday, the week ahead, engagement and people to call.
 - **Header:** no greeting; the date, a chip with the church season in its liturgical colour and a matching stripe, the view switch, and one main action with a **Record ▾** menu for the rest.
 - **Verdict banner:** full width, tinted by tone, with "Updated…" and "What changed". A slim copy sticks to the top once you scroll.
@@ -134,7 +163,7 @@ Every figure follows the user's permissions: nobody sees figures for a page they
 
 ### Church council
 
-*People → Church council* (`/council`) shows the council as an organogram: a tree of the clergy, the Parish Church Council, its committees and the church's organisations.
+*People → Church administration* (`/council`) shows the council as an organogram: a tree of the clergy, the Parish Church Council, its committees and the church's organisations.
 - **Photos:** each card shows the holder's passport photo and full name (smaller photos when a seat has several people), and a vacant seat shows an empty passport frame. Add or change a photo from the member's profile or straight from the seat dialog. Any photo works: the server crops it.
 - **Seats:** each card shows the holders, **Vacant**, *Ex officio* (filled by whoever holds another seat), ⌛ when a term ends within 3 months, *Acting* and *Over term limit*. Seats with nobody under them stack in a column, so wide councils stay readable.
 - **Seat dialog:** current holders with phone numbers, the history of the seat, **Fill the seat** (the end date defaults to the term length), **End term**, and editing the seat.
@@ -156,6 +185,14 @@ Every figure follows the user's permissions: nobody sees figures for a page they
 - **Contacts view:** everyone in a seat, with their photo, phone, email and address, plus call, WhatsApp and email buttons. You can search it, filter by body, **copy all phones or emails**, or download a **CSV**. The seat cards and dialogs have call, WhatsApp and email buttons, and every phone, email and address can be copied. The members list has the same quick buttons.
 - **Phones:** the chart becomes an indented list.
 - **Print:** `/council/print` prints an A4 landscape organogram, one section per body, with the church name and season colour.
+
+### Payroll
+
+*Finance → Payroll* (`/payroll`):
+- **People paid:** clergy, employees, casual workers paid by the day, and council members paid per sitting or per sitting plus a fixed monthly allowance. Each has standing pay lines (Basic, Housing, Transport, Airtime / Welfare, Advance), an NSSF and a PAYE switch, how they're paid (bank, mobile money or cash), and their TIN and NSSF number.
+- **Pay runs:** **Prepare {month}** builds the month from everyone's standing pay. The treasurer enters sittings and days and any one-off lines; NSSF (5%) and PAYE are worked out automatically. Then **Send for approval**. The vicar (never the preparer) **approves** or **returns** it with a note, and the treasurer **records the payment**, which writes the whole month into the books.
+- **NSSF & PAYE:** what's owed for each month, due on the 15th, then **Record remittance** with the NSSF reference or URA PRN.
+- **Payslips:** printable one at a time or the whole month (`/payroll/payslip?run=` or `?id=`). Staff with a login see **My payslips** on their profile.
 
 ### Requisitions and items & sales
 

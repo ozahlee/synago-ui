@@ -15,6 +15,8 @@ export const PERMISSION_LABELS: Record<string, { label: string; area: string }> 
   "requisitions.request": { label: "Ask for things to be bought (requisitions)", area: "Stewardship" },
   "requisitions.approve": { label: "Give the vicar's approval on larger requisitions", area: "Stewardship" },
   "sales.manage": { label: "Record items for sale and sales", area: "Stewardship" },
+  "payroll.manage": { label: "Prepare payroll, people paid and NSSF/PAYE", area: "Stewardship" },
+  "payroll.approve": { label: "Approve the payroll (vicar)", area: "Stewardship" },
   "council.manage": { label: "Set up the church council and who holds each seat", area: "Congregation" },
 }
 

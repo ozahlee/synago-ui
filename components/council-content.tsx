@@ -70,7 +70,7 @@ export function CouncilContent() {
 
   return (
     <Page>
-      <PageHeader eyebrow="People" title="Church council" description="The council, its committees and the church's organisations: who holds each seat, which are empty, and whose term ends soon."
+      <PageHeader eyebrow="People" title="Church administration" description="The clergy, the council, its committees and the church's organisations: who holds each seat, which are empty, and whose term ends soon."
         actions={<>
           <div className="flex items-center gap-2">
             <Label htmlFor="as-of" className="text-xs text-muted-foreground">As at</Label>

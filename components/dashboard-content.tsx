@@ -5,17 +5,19 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   Users, UserPlus, Plus, AlertTriangle, ClipboardCheck, MessageSquareText,
-  UserRoundPlus, CalendarDays, Wallet, History, ChevronDown, ClipboardList,
+  UserRoundPlus, CalendarDays, Wallet, ChevronDown, ClipboardList, Presentation,
 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { AttentionQueue } from "@/components/attention-queue"
-import { DataStatus, EngagementCard, GivingYearChart, HealthCards, Verdict, short } from "@/components/dashboard-health"
+import { EngagementCard, HealthCards, short } from "@/components/dashboard-health"
+import { POSITION_DOT, PositionBanner, positionLine } from "@/components/dashboard-position"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { RecentActivities } from "@/components/recent-activities"
 import { EmptyState, Page } from "@/components/page"
-import type { AttentionItem, CalendarRange, DashboardHealth, DashboardStats, HealthCard, SundaySnapshot } from "@/lib/types"
+import type { AttentionItem, CalendarRange, DashboardGlance, DashboardHealth, DashboardStats, HealthCard, SundaySnapshot } from "@/lib/types"
+import { AttendanceByService, BankBalances, GlanceStrip, IncomeDonut, MoneyFlowChart, ProjectBreakdown } from "@/components/dashboard-glance"
 import { qs, useApi } from "@/lib/api"
 import { KIND_META, LITURGICAL } from "@/lib/calendar"
 import { useAuth } from "@/lib/auth"
@@ -32,28 +34,29 @@ type View = "pastor" | "treasurer" | "office"
  */
 const VIEWS: Record<View, {
   label: string; hint: string
+  /** at-a-glance tiles, in this view's order (others follow) */
+  tiles: string[]
+  /** compact money cards above the charts */
   cards: HealthCard["key"][]
   focus: { label: string; match: (i: AttentionItem) => boolean }
-  chart: "giving" | null
+  attendance: boolean
   week: boolean
 }> = {
   pastor: {
     label: "Pastor", hint: "People, pastoral care and the overall picture",
-    cards: ["attendance", "giving", "members", "cash"],
-    focus: { label: "Everything", match: () => true },
-    chart: "giving", week: true,
+    tiles: ["members", "attendance", "giving", "expenses", "bank", "projects"],
+    cards: [], focus: { label: "Everything", match: () => true }, attendance: true, week: true,
   },
   treasurer: {
     label: "Treasurer", hint: "Money in, money out, and what has to be paid",
-    cards: ["giving", "cash", "due", "unbanked"],
-    focus: { label: "Money items", match: (i) => i.area === "money" || i.key === "welfare" },
-    chart: "giving", week: false,
+    tiles: ["giving", "expenses", "bank", "projects", "members", "attendance"],
+    cards: ["unbanked"],
+    focus: { label: "Money items", match: (i) => i.area === "money" || i.key === "welfare" }, attendance: false, week: false,
   },
   office: {
     label: "Office", hint: "Registers, Sunday records and the week ahead",
-    cards: ["attendance", "members"],
-    focus: { label: "Registers and care", match: (i) => i.area !== "money" },
-    chart: null, week: true,
+    tiles: ["attendance", "members"],
+    cards: [], focus: { label: "Registers and care", match: (i) => i.area !== "money" }, attendance: true, week: true,
   },
 }
 
@@ -83,6 +86,7 @@ export function DashboardContent() {
   }, [broad, can, router])
   const { data: stats, error } = useApi<DashboardStats>(broad ? "/dashboard" : null)
   const { data: health } = useApi<DashboardHealth>(broad ? "/dashboard/health" : null, { refreshInterval: 5 * 60_000 })
+  const { data: glance } = useApi<DashboardGlance>(broad ? "/dashboard/glance" : null, { refreshInterval: 5 * 60_000 })
   const [changes, setChanges] = useState(false)
   const { views, fallback } = useViews()
   const [picked, setPicked] = useState<View | null>(null)
@@ -90,7 +94,7 @@ export function DashboardContent() {
   const view: View = picked && views.includes(picked) ? picked : fallback
   const choose = (v: View) => { setPicked(v); try { localStorage.setItem("synago.dashView", v) } catch {} }
   const cfg = VIEWS[view]
-  const cards = health?.cards ? cfg.cards.map((k) => health.cards.find((c) => c.key === k)).filter((c): c is HealthCard => !!c) : undefined
+  const cards = health?.cards && cfg.cards.length ? cfg.cards.map((k) => health.cards.find((c) => c.key === k)).filter((c): c is HealthCard => !!c) : undefined
 
   const switcher = views.length > 1 && (
     <div role="radiogroup" aria-label="Dashboard view" className="inline-flex shrink-0 rounded-lg border bg-card p-0.5 text-xs shadow-soft">
@@ -102,34 +106,53 @@ export function DashboardContent() {
       ))}
     </div>
   )
-  const rail = (
-    <>
-      <ThisSunday />
-      {cfg.week && <ComingUp />}
-      {view === "pastor" && health?.engagement && <EngagementCard data={health.engagement} />}
-    </>
-  )
-  const chart = cfg.chart && health?.givingYear ? <GivingYearChart data={health.givingYear} /> : null
+  const order = (k: string) => { const i = cfg.tiles.indexOf(k); return i < 0 ? 99 : i }
+  const tiles = glance?.tiles.filter((t) => view !== "office" || cfg.tiles.includes(t.key)).sort((x, y) => order(x.key) - order(y.key))
+  const money = finance && view !== "office"
 
   return (
     <Page className="space-y-6">
       <DashboardHeader switcher={switcher} actions={<QuickActions view={view} />} />
-      {broad && <VerdictBanner verdict={health?.verdict} status={health?.dataStatus} onChanges={() => setChanges(true)} />}
-      <StickyVerdict verdict={health?.verdict} switcher={switcher} />
+      {broad && <PositionBanner position={health?.position} status={health?.dataStatus} view={view} onChanges={() => setChanges(true)} />}
+      <StickyPosition line={positionLine(health?.position, view)} switcher={switcher} />
 
       {error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load the overview" description={error.message} />
       ) : (
         // one 12-column grid: the left 8 are where you decide, the right 4 are context
-        <div className="grid gap-6 lg:grid-cols-12">
-          <div className="flex min-w-0 flex-col gap-6 lg:col-span-8">
-            {/* on a phone the queue comes first, then the numbers */}
-            <div className="order-2 lg:order-1"><HealthCards cards={cards} /></div>
-            <div className="order-1 lg:order-2"><AttentionQueue key={view} focus={cfg.focus.label === "Everything" ? undefined : cfg.focus} /></div>
-            {chart && <div className="order-3">{chart}</div>}
-          </div>
-          <aside className="flex min-w-0 flex-col gap-6 lg:col-span-4">{rail}</aside>
-        </div>
+        <>
+          <GlanceStrip tiles={tiles} />
+          {cards && cards.length > 0 && <HealthCards cards={cards} compact />}
+
+          {money && (glance?.moneyFlow || glance?.banks) && (
+            <section className="grid gap-6 lg:grid-cols-12">
+              {glance?.moneyFlow && <div className="min-w-0 lg:col-span-8"><MoneyFlowChart data={glance.moneyFlow} /></div>}
+              {glance?.banks && <div className="min-w-0 lg:col-span-4"><BankBalances data={glance.banks} /></div>}
+            </section>
+          )}
+
+          {money && (glance?.incomeMix || glance?.expenseMix || glance?.projectBreakdown) && (
+            <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-12">
+              {glance?.incomeMix && <div className="min-w-0 xl:col-span-4"><IncomeDonut data={glance.incomeMix} /></div>}
+              {glance?.expenseMix && <div className="min-w-0 xl:col-span-4"><IncomeDonut data={glance.expenseMix} title="What's consuming the money" empty="No expenses recorded yet." /></div>}
+              {glance?.projectBreakdown && <div className="min-w-0 md:col-span-2 xl:col-span-4"><ProjectBreakdown projects={glance.projectBreakdown} /></div>}
+            </section>
+          )}
+
+          <section className="grid gap-6 lg:grid-cols-12">
+            <div className="min-w-0 lg:col-span-8"><AttentionQueue key={view} limit={5} focus={cfg.focus.label === "Everything" ? undefined : cfg.focus} /></div>
+            <aside className="min-w-0 lg:col-span-4"><ThisSunday /></aside>
+          </section>
+
+          {cfg.attendance && glance?.attendanceByService && <AttendanceByService data={glance.attendanceByService} />}
+
+          {cfg.week && (
+            <section className="grid gap-6 lg:grid-cols-12">
+              <div className={cn("min-w-0", view === "pastor" && health?.engagement ? "lg:col-span-8" : "lg:col-span-12")}><ComingUp /></div>
+              {view === "pastor" && health?.engagement && <div className="min-w-0 lg:col-span-4"><EngagementCard data={health.engagement} /></div>}
+            </section>
+          )}
+        </>
       )}
 
       <Dialog open={changes} onOpenChange={setChanges}>
@@ -166,36 +189,20 @@ function DashboardHeader({ switcher, actions }: { switcher: React.ReactNode; act
           )}
         </p>
       </div>
-      <div className="flex flex-wrap items-center gap-2">{switcher}{actions}</div>
+      <div className="flex flex-wrap items-center gap-2">
+        {switcher}
+        <Button variant="outline" asChild><Link href="/present" title="Full-screen slideshow for a projector or TV"><Presentation className="size-4" /> Present</Link></Button>
+        {actions}
+      </div>
       {colour && <div aria-hidden className="h-1 w-full rounded-full opacity-80" style={{ background: `linear-gradient(90deg, ${colour}, transparent 70%)` }} />}
     </header>
   )
 }
 
-const VERDICT_TONE = {
-  good: { dot: "bg-success", card: "border-success/25 bg-success/[0.05]" },
-  watch: { dot: "bg-warning", card: "border-warning/35 bg-warning/[0.06]" },
-  bad: { dot: "bg-destructive", card: "border-destructive/30 bg-destructive/[0.05]" },
-  neutral: { dot: "bg-muted-foreground", card: "bg-card" },
-} as const
 
 /** The one sentence to read first, full width, tinted by how things are. */
-function VerdictBanner({ verdict, status, onChanges }: { verdict: DashboardHealth["verdict"] | undefined; status: DashboardHealth["dataStatus"] | undefined; onChanges: () => void }) {
-  const tone = VERDICT_TONE[verdict?.tone ?? "neutral"]
-  return (
-    <section aria-label="How things are" className={cn("flex flex-col gap-3 rounded-2xl border px-5 py-4 shadow-soft sm:flex-row sm:items-center", tone.card)}>
-      <span className={cn("hidden size-2.5 shrink-0 rounded-full sm:block", tone.dot)} aria-hidden />
-      <p className="min-w-0 flex-1 text-base leading-relaxed text-muted-foreground md:text-lg"><Verdict verdict={verdict} /></p>
-      <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-        <DataStatus status={status} />
-        <button type="button" onClick={onChanges} className="inline-flex items-center gap-1 hover:text-foreground"><History className="size-3.5" /> What changed</button>
-      </div>
-    </section>
-  )
-}
-
-/** Once the header scrolls away, a slim bar keeps the verdict and the view switch in sight. */
-function StickyVerdict({ verdict, switcher }: { verdict: DashboardHealth["verdict"] | undefined; switcher: React.ReactNode }) {
+/** Once the header scrolls away, a slim bar keeps the church position and the view switch in sight. */
+function StickyPosition({ line, switcher }: { line: ReturnType<typeof positionLine>; switcher: React.ReactNode }) {
   const [shown, setShown] = useState(false)
   useEffect(() => {
     const main = document.querySelector("main")
@@ -204,13 +211,13 @@ function StickyVerdict({ verdict, switcher }: { verdict: DashboardHealth["verdic
     main.addEventListener("scroll", on, { passive: true })
     return () => main.removeEventListener("scroll", on)
   }, [])
-  if (!verdict) return null
+  if (!line) return null
   return (
     <div aria-hidden={!shown} className={cn("pointer-events-none sticky top-2 z-10 -mt-6 hidden h-0 md:top-[76px] md:block", shown && "pointer-events-auto")}>
       <div className={cn("mx-auto flex max-w-3xl items-center gap-3 rounded-full border bg-card/95 px-4 py-2 shadow-lg backdrop-blur transition duration-200",
         shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0")}>
-        <span className={cn("size-2.5 shrink-0 rounded-full", VERDICT_TONE[verdict.tone].dot)} />
-        <p className="min-w-0 flex-1 truncate text-sm"><b>{verdict.opening}:</b> <span className="text-muted-foreground">{verdict.parts.map((p) => p.text).join(", ")}</span></p>
+        <span className={cn("size-2.5 shrink-0 rounded-full", POSITION_DOT[line.tone])} />
+        <p className="min-w-0 flex-1 truncate text-sm"><b className="tabular">{line.head}</b> <span className="text-muted-foreground">{line.text}</span></p>
         {switcher}
       </div>
     </div>
@@ -249,8 +256,13 @@ function QuickActions({ view }: { view: View }) {
 }
 
 /** Change vs a comparison value: "+12" / "−8%" style chip. */
-function Delta({ now, before, label, pct }: { now: number; before: number | null; label: string; pct?: boolean }) {
-  if (before === null || before === 0) return <span className="text-xs text-muted-foreground">no {label} figure</span>
+function Delta({ now, before, label, pct, short: brief }: { now: number; before: number | null; label: string; pct?: boolean; short?: boolean }) {
+  if (before === null || before === 0) return brief ? null : <span className="text-xs text-muted-foreground">no {label} figure</span>
+  if (brief) {
+    const d = now - before
+    const v = pct ? `${Math.round((d / before) * 100)}%` : Math.round(d).toLocaleString()
+    return <span className={cn("block text-[11px] tabular", d > 0 ? "text-success" : d < 0 ? "text-destructive" : "text-muted-foreground")}>{d > 0 ? "▲ " : d < 0 ? "▼ " : ""}{d === 0 ? "same" : v.replace("-", "")}</span>
+  }
   const diff = now - before
   const shown = pct ? `${Math.round((diff / before) * 100)}%` : Math.round(diff).toLocaleString()
   return (
@@ -283,40 +295,45 @@ function ThisSunday() {
         </div>
       ) : (
         <>
-          <div className={cn("grid gap-3", data.showAttendance && data.showGiving ? "grid-cols-2" : "grid-cols-1")}>
+          <div className="grid grid-cols-3 gap-2 text-center">
             {data.showAttendance && t.attendance !== null && (
-              <div className="rounded-xl border p-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Users className="size-3.5" /> In church that day</p>
-                <p className="text-2xl font-semibold tabular">{t.attendance.toLocaleString()}</p>
-                <Delta now={t.attendance} before={t.attendancePrev} label="last week" />
-                {!!t.visitors && <p className="text-xs text-muted-foreground">incl. {t.visitors} visitor{t.visitors === 1 ? "" : "s"}</p>}
+              <div className="rounded-xl bg-secondary/60 px-2 py-2">
+                <p className="text-xl font-semibold tabular">{t.attendance.toLocaleString()}</p>
+                <p className="text-[11px] text-muted-foreground">in church</p>
+                <Delta now={t.attendance} before={t.attendancePrev} label="last week" short />
               </div>
             )}
             {data.showGiving && t.giving !== null && (
-              <div className="rounded-xl border p-3">
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><Wallet className="size-3.5" /> Offertory</p>
-                <p className="truncate text-2xl font-semibold tabular" title={money(t.giving)}>{short(t.giving, "money")}</p>
-                <Delta now={t.giving} before={t.givingPrev} label="last week" pct />
-                <div><Delta now={t.giving} before={t.givingLastYear} label="last year" pct /></div>
+              <div className="rounded-xl bg-secondary/60 px-2 py-2">
+                <p className="truncate text-xl font-semibold tabular" title={money(t.giving)}>{short(t.giving, "money").replace(/^\S+ /, "")}</p>
+                <p className="text-[11px] text-muted-foreground">offertory</p>
+                <Delta now={t.giving} before={t.givingPrev} label="last week" pct short />
+              </div>
+            )}
+            {data.showAttendance && (
+              <div className="rounded-xl bg-secondary/60 px-2 py-2">
+                <p className="text-xl font-semibold tabular">{t.visitors ?? 0}</p>
+                <p className="text-[11px] text-muted-foreground">visitors</p>
               </div>
             )}
           </div>
-          <table className="mt-4 w-full text-sm">
-            <thead><tr className="text-xs text-muted-foreground">
-              <th className="pb-1 text-left font-medium">Service</th>
-              {data.showAttendance && <th className="pb-1 text-right font-medium">People</th>}
-              {data.showGiving && <th className="pb-1 text-right font-medium">Giving</th>}
-            </tr></thead>
-            <tbody className="divide-y">
-              {data.services.map((s) => (
-                <tr key={s.service}>
-                  <td className="py-1.5">{s.service}</td>
-                  {data.showAttendance && <td className="py-1.5 text-right tabular">{s.attendance ?? <MissingLink href={`/attendance?date=${data.date}`} />}</td>}
-                  {data.showGiving && <td className="py-1.5 text-right tabular">{s.giving ? money(s.giving) : <MissingLink href="/offertory" />}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <ul className="mt-4 space-y-2.5">
+            {data.services.map((sv) => {
+              const top = Math.max(1, ...data.services.map((x) => x.attendance ?? 0))
+              return (
+                <li key={sv.service} className="text-sm">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate">{sv.service}</span>
+                    <span className="flex shrink-0 items-center gap-3 tabular">
+                      {data.showAttendance && (sv.attendance ?? <MissingLink href={`/attendance?date=${data.date}`} />)}
+                      {data.showGiving && <span className="w-16 text-right text-xs text-muted-foreground">{sv.giving ? compactMoney(sv.giving) : <MissingLink href="/offertory" />}</span>}
+                    </span>
+                  </div>
+                  {data.showAttendance && <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-[var(--chart-1)] transition-[width] duration-700" style={{ width: `${((sv.attendance ?? 0) / top) * 100}%` }} /></div>}
+                </li>
+              )
+            })}
+          </ul>
         </>
       )}
     </Card>
@@ -327,6 +344,8 @@ function ThisSunday() {
 export const SECTION = "text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground"
 
 /** A gap in last Sunday's records, fixed in one click (this is the only place it is shown). */
+const compactMoney = (n: number) => new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(n)
+
 function MissingLink({ href }: { href: string }) {
   return <Link href={href} className="inline-flex items-center gap-1 rounded-md bg-warning/12 px-1.5 py-0.5 text-xs font-medium text-[color-mix(in_oklch,var(--warning)_70%,black)] hover:underline dark:text-warning">Record</Link>
 }

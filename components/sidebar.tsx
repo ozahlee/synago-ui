@@ -52,6 +52,7 @@ import {
   ClipboardList,
   ShoppingBag,
   Network,
+  Coins,
 } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
@@ -89,7 +90,7 @@ export const NAVIGATION: NavItem[] = [
   { name: "Cell groups", href: "/cell-groups", icon: HomeIcon, permission: "members.view", group: "People" },
   { name: "Areas", href: "/areas", icon: Map, permission: "members.view", group: "People" },
   { name: "Ministries", href: "/ministries", icon: UsersRound, permission: "members.view", group: "People" },
-  { name: "Church council", href: "/council", icon: Network, permission: "members.view", group: "People" },
+  { name: "Church administration", href: "/council", icon: Network, permission: "members.view", group: "People" },
   { name: "Positions", href: "/positions", icon: BadgeCheck, permission: "members.view", group: "People" },
   { name: "Guests & placements", href: "/guests", icon: Mic2, permission: "members.view", group: "People" },
 
@@ -110,6 +111,7 @@ export const NAVIGATION: NavItem[] = [
 
   { name: "Accounts", href: "/accounts", icon: Wallet, permission: "finance.view", group: "Finance" },
   { name: "Loans", href: "/loans", icon: Banknote, permission: "finance.view", group: "Finance" },
+  { name: "Payroll", href: "/payroll", icon: Coins, permission: "payroll.manage|payroll.approve", group: "Finance" },
   { name: "Requisitions", href: "/requisitions", icon: ClipboardList, permission: "requisitions.request|finance.view|requisitions.approve", group: "Finance" },
   { name: "Items & sales", href: "/sales", icon: ShoppingBag, permission: "finance.view|sales.manage", group: "Finance" },
   { name: "Budget", href: "/budget", icon: PieChart, permission: "finance.view", group: "Finance" },

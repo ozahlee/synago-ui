@@ -22,12 +22,33 @@ const STATUS = {
 } as const
 
 /** A row of health cards: swipeable on a phone, a strip across the decision column on a screen. */
-export function HealthCards({ cards }: { cards: HealthCard[] | undefined }) {
+export function HealthCards({ cards, compact: slim }: { cards: HealthCard[] | undefined; compact?: boolean }) {
   const n = cards?.length ?? 4
+  if (slim) {
+    if (!cards) return <section className="grid gap-3 sm:grid-cols-3">{[1, 2, 3].map((i) => <div key={i} className="h-[76px] animate-pulse rounded-2xl bg-muted" />)}</section>
+    return <section aria-label="Money" className={cn("grid gap-3", n >= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>{cards.map((c) => <SlimTile key={c.key} c={c} />)}</section>
+  }
   const grid = cn("-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0",
     n >= 4 ? "sm:grid-cols-2 xl:grid-cols-4" : n === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")
   if (!cards) return <section className={grid}>{[1, 2, 3, 4].map((i) => <div key={i} className="h-[184px] min-w-[72%] animate-pulse rounded-2xl bg-muted sm:min-w-0" />)}</section>
   return <section aria-label="Health" className={grid}>{cards.map((c) => <HealthTile key={c.key} c={c} />)}</section>
+}
+
+/** One line: label, value and status; the cause underneath. For a strip of money figures. */
+function SlimTile({ c }: { c: HealthCard }) {
+  const s = STATUS[c.status]
+  return (
+    <Link href={c.href} className={cn("flex min-w-0 items-center gap-3 rounded-2xl border bg-card px-4 py-3 shadow-soft transition hover:border-primary/30", s.card)}>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+          <span className="truncate">{c.label}</span>
+          {s.label && s.icon && <span className={cn("inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 text-[10px] normal-case tracking-normal", s.chip)}><s.icon className="size-3" />{s.label}</span>}
+        </p>
+        <p className="truncate text-xs text-muted-foreground" title={c.cause ?? undefined}>{c.unit}{c.cause ? ` · ${c.cause}` : ""}</p>
+      </div>
+      <p className="shrink-0 text-lg font-semibold tabular" title={c.value === null ? undefined : money(c.value)}>{c.value === null ? "—" : short(c.value, c.format)}</p>
+    </Link>
+  )
 }
 
 /**
@@ -110,8 +131,8 @@ export function DataStatus({ status }: { status: DashboardHealth["dataStatus"] |
   return <span className="inline-flex items-center gap-1"><Clock className="size-3.5" /> Updated {mins < 1 ? "just now" : `${mins} min ago`}</span>
 }
 
-/** Giving through the year so far, against last year (and the target): are we ahead or behind? */
-export function GivingYearChart({ data }: { data: NonNullable<DashboardHealth["givingYear"]> }) {
+/** Collections through the year so far, against last year (and the target): are we ahead or behind? */
+export function GivingYearChart({ data, height = 250 }: { data: NonNullable<DashboardHealth["givingYear"]>; height?: number }) {
   let a = 0, b = 0, t = 0
   const rows = data.months.map((m) => {
     b += m.lastYear
@@ -130,7 +151,7 @@ export function GivingYearChart({ data }: { data: NonNullable<DashboardHealth["g
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Giving through {data.yearLabel}</CardTitle>
+        <CardTitle className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">Collections through {data.yearLabel}</CardTitle>
         <CardDescription className="text-base text-foreground/80">
           {now?.thisYear != null ? <><b className="text-foreground">{money(now.thisYear)}</b> so far</> : "Nothing given yet this year"}
           {diff !== null && <>, <span className={cn("font-semibold", ahead ? "text-success" : "text-destructive")}>{ahead ? "▲" : "▼"} {Math.abs(diff)}% {ahead ? "ahead of" : "behind"}</span> {data.target ? "the target" : "last year"} at this point</>}
@@ -138,23 +159,27 @@ export function GivingYearChart({ data }: { data: NonNullable<DashboardHealth["g
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={280}>
+        <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid {...gridProps} />
             <XAxis dataKey="month" {...axisProps} />
             <YAxis {...axisProps} width={56} tickFormatter={(v) => compact(Number(v))} />
             <Tooltip {...tooltipProps} cursor={{ stroke: "var(--border)" }}
-              formatter={(v, name) => (name === "gap" ? [null, null] : [money(Number(v)), name])}
+              formatter={(v, name) => [money(Number(v)), name]}
               itemSorter={(i) => (i.dataKey === "thisYear" ? 0 : 1)} />
             <Legend {...legendProps} payload={[
               { value: "This year", type: "line", color: "var(--chart-1)", id: "a" },
               ...(hasLastYear ? [{ value: "Last year", type: "line" as const, color: "var(--muted-foreground)", id: "b" }] : []),
               ...(data.target ? [{ value: "Target", type: "line" as const, color: "var(--chart-4)", id: "t" }] : []),
             ]} />
-            {hasLastYear && <Area dataKey="gap" name="gap" stroke="none" fill={ahead ? "var(--success)" : "var(--destructive)"} fillOpacity={0.12} isAnimationActive={false} activeDot={false} legendType="none" />}
-            {hasLastYear && <Line dataKey="lastYear" name="Last year" stroke="var(--muted-foreground)" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} />}
-            {data.target && <Line dataKey="target" name="Target" stroke="var(--chart-4)" strokeWidth={2} strokeDasharray="2 4" dot={false} activeDot={{ r: 4 }} />}
-            <Line dataKey="thisYear" name="This year" stroke="var(--chart-1)" strokeWidth={2.5} dot={false} activeDot={{ r: 5, stroke: "var(--card)", strokeWidth: 2 }} connectNulls={false} />
+            <defs>
+              <linearGradient id="giving-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.45} /><stop offset="100%" stopColor="var(--chart-1)" stopOpacity={0.03} />
+              </linearGradient>
+            </defs>
+            {hasLastYear && <Line type="monotone" dataKey="lastYear" name="Last year" stroke="var(--muted-foreground)" strokeWidth={2} strokeDasharray="5 4" dot={false} activeDot={{ r: 4 }} />}
+            {data.target && <Line type="monotone" dataKey="target" name="Target" stroke="var(--chart-4)" strokeWidth={2} strokeDasharray="2 4" dot={false} activeDot={{ r: 4 }} />}
+            <Area type="monotone" dataKey="thisYear" name="This year" stroke="var(--chart-1)" strokeWidth={2.5} fill="url(#giving-fill)" dot={false} activeDot={{ r: 5, stroke: "var(--card)", strokeWidth: 2 }} connectNulls={false} animationDuration={800} />
           </ComposedChart>
         </ResponsiveContainer>
         <details className="mt-2 text-xs text-muted-foreground">

@@ -1,5 +1,7 @@
 "use client"
 
+import { money } from "@/lib/format"
+
 import { Check, KeyRound, Mail, Phone, ShieldCheck, UserRound, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,10 +10,31 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { FieldError, str, useApiForm } from "@/components/form"
 import { Page, PageHeader, PersonAvatar } from "@/components/page"
-import { patch, put } from "@/lib/api"
+import { patch, put, useApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { PERMISSION_LABELS, ROLE_BLURB } from "@/lib/permissions"
 import type { User } from "@/lib/types"
+
+/** Your own payslips, if the church pays you (shown only when there are some). */
+function MyPayslips() {
+  const { data } = useApi<Array<{ id: string; period: string; gross: number; net: number; paidOn: string | null }>>("/my/payslips")
+  if (!data?.length) return null
+  return (
+    <Card className="gap-0 py-0">
+      <div className="border-b px-6 py-4"><h2 className="text-lg font-semibold">My payslips</h2><p className="text-sm text-muted-foreground">Open one to view or print it.</p></div>
+      <ul className="divide-y">
+        {data.map((p) => (
+          <li key={p.id}>
+            <a href={`/payroll/payslip?id=${p.id}`} target="_blank" rel="noreferrer" className="flex items-center justify-between px-6 py-3 text-sm transition hover:bg-muted/50">
+              <span className="font-medium">{new Date(`${p.period}-01T00:00`).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</span>
+              <span className="text-muted-foreground">gross {money(p.gross)} · <b className="text-foreground">net {money(p.net)}</b></span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
 
 export function ProfileContent() {
   const { user, setUser } = useAuth()
@@ -50,6 +73,8 @@ export function ProfileContent() {
           </div>
         </div>
       </Card>
+
+      <MyPayslips />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

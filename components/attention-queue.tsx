@@ -27,7 +27,8 @@ const BUCKETS = [
 ] as const
 
 /** The office's to-do queue: what is due today first, then this week, then whatever can wait. */
-export function AttentionQueue({ focus }: { focus?: { label: string; match: (i: AttentionItem) => boolean } }) {
+export function AttentionQueue({ focus, limit }: { focus?: { label: string; match: (i: AttentionItem) => boolean }; limit?: number }) {
+  const [all5, setAll5] = useState(false)
   const { data: all, mutate } = useApi<AttentionItem[]>("/dashboard/attention", { refreshInterval: 5 * 60_000 })
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [showHidden, setShowHidden] = useState(false)
@@ -80,6 +81,15 @@ export function AttentionQueue({ focus }: { focus?: { label: string; match: (i: 
           <p className="font-semibold">All clear</p>
           <p className="max-w-xs text-sm text-muted-foreground">Nothing is waiting on you right now. Visitors, follow-ups, Sunday records and money checks show up here when they need someone.</p>
         </div>
+      ) : limit && !all5 && visible.length > limit ? (
+        // the short version: the most urgent few, then "see all"
+        <>
+          <ul className="divide-y">{visible.slice(0, limit).map((i) => <Row key={i.key} item={i} api={api} />)}</ul>
+          <button type="button" onClick={() => setAll5(true)} className="flex w-full items-center justify-between border-t bg-muted/30 px-5 py-2.5 text-sm hover:bg-muted/60">
+            <span className="text-muted-foreground">{BUCKETS.map((b) => { const n = visible.filter((i) => i.bucket === b.key).length; return n ? `${n} ${b.label.toLowerCase()}` : null }).filter(Boolean).join(" · ")}</span>
+            <span className="font-medium text-primary">See all {visible.length} →</span>
+          </button>
+        </>
       ) : (
         <div className="divide-y">
           {BUCKETS.map((b) => {

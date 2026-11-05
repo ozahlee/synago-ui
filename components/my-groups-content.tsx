@@ -61,7 +61,7 @@ export function MyGroupsContent() {
                 {g.type === "sunday_school_class" && (
                   <Card>
                     <CardHeader><CardTitle>Register</CardTitle><CardDescription>Tick the children who came, then save.</CardDescription></CardHeader>
-                    <CardContent><ClassRegister classId={g.id} pupils={g.people.map((p) => ({ id: p.id, name: p.name, age: p.age, parent: p.parent }))} canEdit /></CardContent>
+                    <CardContent><ClassRegister classId={g.id} pupils={g.people.map((p) => ({ id: p.id, name: p.name, age: p.age, parent: p.parent, gender: (p as { gender?: string }).gender }))} canEdit /></CardContent>
                   </Card>
                 )}
 

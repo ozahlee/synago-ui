@@ -203,6 +203,13 @@ export type HealthCard = {
 export type DashboardHealth = {
   cards: HealthCard[]
   givingYear: { yearLabel: string; target: number | null; months: Array<{ month: string; thisYear: number | null; lastYear: number; target: number | null }> } | null
+  position: {
+    asOf: string
+    money: { cash: number; restricted: number; free: number; due: number; after: number; days: number; until: string; tone: "good" | "watch" | "bad"; lines: Array<{ key: string; label: string; amount: number; href: string; note: string | null }> } | null
+    sunday: { date: string; attendance: number | null; attendanceChange: number | null; visitors: number | null; collection: number | null; collectionChange: number | null; missingServices: number; href: string } | null
+    month: { label: string; in: number; out: number; net: number; href: string } | null
+    flags: Array<{ title: string; detail: string | null; href: string; severity: string; area: string }>
+  }
   dataStatus: { asOf: string; sunday: string; missing: Array<{ what: "attendance" | "offertory"; service: string; href: string }> }
   verdict: { tone: "good" | "watch" | "bad" | "neutral"; opening: string; parts: Array<{ text: string; tone: "good" | "watch" | "bad" | "neutral"; href: string | null }> }
   engagement: {
@@ -510,6 +517,8 @@ export type SundaySchoolClass = {
   minAge: number
   maxAge: number
   room: string | null
+  /** The service the class usually meets in. */
+  service?: string | null
   description: string | null
   pupils: number
   teachers: SundaySchoolTeacher[]
@@ -1155,3 +1164,49 @@ export type CouncilCheck = {
 }
 
 export type CouncilEvent = { date: string; kind: "joined" | "acting" | "completed" | "resigned" | "died" | "removed" | "promoted" | "moved" | "other" | "suspended" | "reinstated"; text: string; seat: string; note: string | null }
+
+export type SundaySchoolRegister = {
+  date: string; service: string; present: string[]; visitingBoys: number; visitingGirls: number; notes: string | null
+  boys: number; girls: number; total: number; services: string[]
+}
+type SSSum = { boys: number; girls: number; unknown: number; visitors: number; total: number; sessions: number; average: number }
+export type SundaySchoolReport = {
+  from: string; to: string | null; services: string[]
+  sundays: Array<{ date: string; rows: Array<{ classId: string; class: string; date: string; service: string; boys: number; girls: number; unknown: number; visitors: number; total: number }> } & SSSum>
+  byClass: Array<{ id: string; name: string; ages: string; service: string | null; byService: Array<{ service: string } & SSSum> } & SSSum>
+  byService: Array<{ service: string } & SSSum>
+  totals: SSSum
+}
+
+export type PayLineT = { kind: "earning" | "deduction"; name: string; amount: number; oneOff?: boolean; auto?: boolean }
+export type Payee = {
+  id: string; memberId: string | null; name: string; kind: "clergy" | "employee" | "casual" | "council"; role: string | null
+  basis: "monthly" | "daily" | "sitting" | "both"; dailyRate: number | null; sittingRate: number | null; nssf: boolean; paye: boolean
+  paymentMethod: string; bankName: string | null; accountNumber: string | null; mobileNumber: string | null; tin: string | null; nssfNumber: string | null
+  startDate: string | null; endDate: string | null; status: "active" | "ended"; notes: string | null; photoUrl: string | null; phone: string | null
+  lines: PayLineT[]; monthly: number; seats: string[]
+}
+export type PayslipT = {
+  id: string; period: string | null; payeeId: string; name: string; kind: Payee["kind"]; role: string | null; basis: Payee["basis"]
+  sittingRate: number | null; dailyRate: number | null; nssfOn: boolean; payeOn: boolean; paymentMethod: string; account: string | null; tin: string | null; nssfNumber: string | null
+  photoUrl: string | null; sittings: number; days: number; lines: PayLineT[]
+  gross: number; nssfEmployee: number; nssfEmployer: number; paye: number; deductions: number; net: number; paidOn: string | null
+}
+export type PayrollRunRow = {
+  id: string; period: string; status: "draft" | "submitted" | "approved" | "paid"; people: number; gross: number; net: number; paye: number; nssf: number; employerNssf: number
+  preparedBy: string | null; approvedBy: string | null; paidOn: string | null; returnedNote: string | null
+}
+export type PayrollRun = PayrollRunRow & { cost: number; deductions: number; slips: PayslipT[]; can: { edit: boolean; submit: boolean; approve: boolean; pay: boolean; delete: boolean } }
+export type Remittance = { id: string; kind: "nssf" | "paye"; period: string | null; amount: number; dueDate: string; paidOn: string | null; reference: string | null; paymentMethod: string | null; overdue: boolean }
+
+export type GlanceTile = { key: string; label: string; value: string; sub: string | null; href: string; spark: number[]; change: number | null; tone: "watch" | null }
+export type DashboardGlance = {
+  tiles: GlanceTile[]
+  incomeMix: { total: number; from: string; slices: Array<{ name: string; amount: number }> } | null
+  expenseMix: { total: number; from: string; slices: Array<{ name: string; amount: number }> } | null
+  moneyFlow: { yearLabel: string; collections: number; expenses: number; months: Array<{ month: string; collections: number | null; expenses: number | null }> } | null
+  banks: { accounts: Array<{ name: string; kind: "cash" | "mobile_money" | "bank"; amount: number }>; total: number; restricted: number; free: number } | null
+  projectBreakdown: Array<{ id: string; name: string; status: string; budget: number; target: number; raised: number; spent: number }> | null
+  attendanceByService: { services: string[]; weeks: Array<Record<string, number | string>> } | null
+  projects: Array<{ id: string; name: string; target: number; raised: number; pct: number }> | null
+}

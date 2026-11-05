@@ -5,6 +5,7 @@ import { mutate } from "swr"
 import { School, Plus, Wand2, Users, UserX, MoreHorizontal, Pencil, Trash2, Phone, GraduationCap, DoorOpen } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -18,6 +19,12 @@ import { ClassRegister } from "@/components/class-register"
 import { FieldError, num, runAction, str, useApiForm } from "@/components/form"
 import { del, patch, post, useApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
+import Link from "next/link"
+import { Printer } from "lucide-react"
+import { PeriodFilter } from "@/components/period-filter"
+import { usePeriod } from "@/lib/period"
+import { SundaySchoolReportView } from "@/components/sunday-school-report"
+import { useSettings } from "@/lib/settings"
 import type { SundaySchoolClass, SundaySchoolIndex } from "@/lib/types"
 
 const refresh = () => mutate((k) => typeof k === "string" && (k.startsWith("/sunday-school") || k.startsWith("/members") || k === "/dashboard"))
@@ -65,7 +72,7 @@ export function SundaySchoolContent() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="text-lg font-semibold">{c.name}</h3>
-                    <p className="text-sm text-muted-foreground">Ages {c.minAge}–{c.maxAge}{c.room ? ` · ${c.room}` : ""}</p>
+                    <p className="text-sm text-muted-foreground">Ages {c.minAge}–{c.maxAge}{c.room ? ` · ${c.room}` : ""}{c.service ? ` · ${c.service}` : ""}</p>
                   </div>
                   {canManage && (
                     <div onClick={(e) => e.stopPropagation()}>
@@ -110,6 +117,8 @@ export function SundaySchoolContent() {
         </div>
       )}
 
+      {classes.length > 0 && <SundaySchoolReportSection />}
+
       <ClassDialog key="new" open={dialog === "new"} onOpenChange={(o) => !o && setDialog(null)} />
       <ConfirmDialog
         open={dialog === "sort"}
@@ -144,6 +153,25 @@ export function SundaySchoolContent() {
   )
 }
 
+function SundaySchoolReportSection() {
+  const period = usePeriod("this_year")
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Report</h2>
+          <p className="text-sm text-muted-foreground">Each class by service, boys and girls, and Sunday by Sunday.</p>
+        </div>
+        <div className="flex items-end gap-2">
+          <PeriodFilter period={period} />
+          <Button variant="outline" asChild><Link href={`/attendance/report?${new URLSearchParams({ from: period.range.from ?? "", to: period.range.to ?? "" })}`} target="_blank"><Printer className="size-4" /> Print</Link></Button>
+        </div>
+      </div>
+      <SundaySchoolReportView from={period.range.from} to={period.range.to} />
+    </section>
+  )
+}
+
 export function ClassDetail({ id, canEdit, open, onOpenChange }: { id: string; canEdit: boolean; open: boolean; onOpenChange: (o: boolean) => void }) {
   const { data: c } = useApi<SundaySchoolClass>(open ? `/sunday-school/classes/${id}` : null)
   return (
@@ -154,7 +182,8 @@ export function ClassDetail({ id, canEdit, open, onOpenChange }: { id: string; c
             <DialogHeader>
               <DialogTitle className="text-2xl">{c.name}</DialogTitle>
               <DialogDescription>
-                Ages {c.minAge}–{c.maxAge}{c.room ? ` · ${c.room}` : ""} · {c.pupils} pupils
+                Ages {c.minAge}–{c.maxAge}{c.room ? ` · ${c.room}` : ""}{c.service ? ` · ${c.service}` : ""} · {c.pupils} pupils
+                {c.pupilList ? ` (${c.pupilList.filter((p) => p.gender === "male").length} boys, ${c.pupilList.filter((p) => p.gender === "female").length} girls)` : ""}
                 {c.teachers.length ? ` · taught by ${c.teachers.map((t) => t.name).join(", ")}` : ""}
               </DialogDescription>
             </DialogHeader>
@@ -164,7 +193,7 @@ export function ClassDetail({ id, canEdit, open, onOpenChange }: { id: string; c
                 <TabsTrigger value="pupils"><Users className="size-4" /> Pupils & parents</TabsTrigger>
               </TabsList>
               <TabsContent value="register">
-                <ClassRegister classId={c.id} pupils={c.pupilList ?? []} canEdit={canEdit} />
+                <ClassRegister classId={c.id} pupils={c.pupilList ?? []} canEdit={canEdit} usualService={c.service} />
               </TabsContent>
               <TabsContent value="pupils">
                 <ul className="divide-y rounded-xl border">
@@ -192,8 +221,10 @@ export function ClassDetail({ id, canEdit, open, onOpenChange }: { id: string; c
 }
 
 function ClassDialog({ record, open, onOpenChange }: { record?: SundaySchoolClass; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const { services } = useSettings()
+  const [service, setService] = useState(record?.service ?? "none")
   const { handleSubmit, pending, error, reset } = useApiForm(async (fd) => {
-    const body = { name: str(fd, "name"), minAge: num(fd, "minAge"), maxAge: num(fd, "maxAge"), room: str(fd, "room"), description: str(fd, "description") }
+    const body = { name: str(fd, "name"), minAge: num(fd, "minAge"), maxAge: num(fd, "maxAge"), room: str(fd, "room"), service: service === "none" ? null : service, description: str(fd, "description") }
     if (record) await patch(`/sunday-school/classes/${record.id}`, body)
     else await post("/sunday-school/classes", body)
     refresh()
@@ -207,7 +238,10 @@ function ClassDialog({ record, open, onOpenChange }: { record?: SundaySchoolClas
           <div className="col-span-2 space-y-2"><Label htmlFor="c-name">Name</Label><Input id="c-name" name="name" defaultValue={record?.name} placeholder="e.g. Juniors" required /><FieldError error={error} name="name" /></div>
           <div className="space-y-2"><Label htmlFor="c-min">From age</Label><Input id="c-min" name="minAge" type="number" min={0} max={12} defaultValue={record?.minAge ?? 0} required /></div>
           <div className="space-y-2"><Label htmlFor="c-max">To age</Label><Input id="c-max" name="maxAge" type="number" min={0} max={12} defaultValue={record?.maxAge ?? 12} required /><FieldError error={error} name="maxAge" /></div>
-          <div className="col-span-2 space-y-2"><Label htmlFor="c-room"><DoorOpen className="inline size-3.5" /> Room</Label><Input id="c-room" name="room" defaultValue={record?.room ?? ""} /></div>
+          <div className="space-y-2"><Label htmlFor="c-room"><DoorOpen className="inline size-3.5" /> Room</Label><Input id="c-room" name="room" defaultValue={record?.room ?? ""} /></div>
+          <div className="space-y-2"><Label htmlFor="c-svc">Usually meets in</Label>
+            <Select value={service} onValueChange={(v) => v && setService(v)}><SelectTrigger id="c-svc" className="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="none">Not set</SelectItem>{services.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent></Select></div>
           <div className="col-span-2 space-y-2"><Label htmlFor="c-desc">Notes</Label><Textarea id="c-desc" name="description" rows={2} defaultValue={record?.description ?? ""} /></div>
           <DialogFooter className="col-span-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

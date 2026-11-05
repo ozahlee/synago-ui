@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { mutate } from "swr"
-import { ChevronLeft, ChevronRight, ClipboardCheck, Percent, Users, Baby, Save } from "lucide-react"
+import { ChevronLeft, ChevronRight, ClipboardCheck, Download, Percent, Printer, Users, Baby, Save } from "lucide-react"
+import Link from "next/link"
+import { useSettings } from "@/lib/settings"
+import { cn } from "@/lib/utils"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -85,10 +88,10 @@ export function AttendanceContent() {
         />
       </section>
 
-      <Card className="gap-0 overflow-hidden py-0">
+      <Card id="headcount" className="scroll-mt-24 gap-0 overflow-hidden py-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
           <div>
-            <h2 className="text-lg font-semibold">Head count</h2>
+            <h2 className="text-lg font-semibold">Head count{day === lastSunday() ? <span className="ml-2 text-sm font-normal text-muted-foreground">last Sunday</span> : null}</h2>
             <p className="text-sm text-muted-foreground">Leave a service at zero if it wasn&apos;t held.</p>
           </div>
           <div className="flex items-center gap-1">
@@ -185,6 +188,96 @@ export function AttendanceContent() {
           </ResponsiveContainer>
         </CardContent>
       </Card>
+
+      <AttendanceHistory days={trends?.days} period={period.label} range={period.range} current={day}
+        onOpen={(d) => { setDay(d); document.getElementById("headcount")?.scrollIntoView({ behavior: "smooth", block: "start" }) }} />
     </Page>
+  )
+}
+
+/** Every recorded Sunday in the period, newest first: per service, by group, and the change from the week before. */
+function AttendanceHistory({ days, period, range, current, onOpen }: { days: AttendanceTrends["days"] | undefined; period: string; range: { from: string | null; to: string | null }; current: string; onOpen: (date: string) => void }) {
+  const { services } = useSettings()
+  const list = [...(days ?? [])].reverse()
+  // services that were ever counted in the period, in the church's own order
+  const cols = services.filter((s) => list.some((d) => d.services.some((x) => x.service === s)))
+  const svc = (d: AttendanceTrends["days"][number], name: string) => d.services.find((x) => x.service === name)?.total ?? null
+  const csv = () => {
+    const head = ["Date", ...cols, "Men", "Women", "Children", "Visitors", "Total"]
+    const body = list.map((d) => [d.date, ...cols.map((c) => svc(d, c) ?? ""), d.men, d.women, d.children, d.visitors, d.total].join(","))
+    const a = document.createElement("a")
+    a.href = URL.createObjectURL(new Blob([[head.join(","), ...body].join("\n")], { type: "text/csv" }))
+    a.download = `attendance-${list.at(-1)?.date ?? ""}-to-${list[0]?.date ?? ""}.csv`
+    a.click()
+  }
+  return (
+    <Card className="gap-0 overflow-hidden py-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
+        <div>
+          <h2 className="text-lg font-semibold">Attendance report</h2>
+          <p className="text-sm text-muted-foreground">Every Sunday counted · {period.toLowerCase()}. Click one to open it above.</p>
+        </div>
+        {list.length > 0 && (
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild><Link href={`/attendance/report?${new URLSearchParams({ from: range.from ?? "", to: range.to ?? "" })}`} target="_blank"><Printer className="size-4" /> Print report</Link></Button>
+            <Button variant="outline" size="sm" onClick={csv}><Download className="size-4" /> CSV</Button>
+          </div>
+        )}
+      </div>
+      {!days ? <div className="m-6 h-40 animate-pulse rounded-xl bg-muted" /> : list.length === 0 ? (
+        <p className="px-6 py-10 text-center text-sm text-muted-foreground">No Sundays counted in this period yet.</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                <th className="px-6 py-3 text-left">Sunday</th>
+                {cols.map((c) => <th key={c} className="hidden px-3 py-3 text-right md:table-cell">{c}</th>)}
+                <th className="hidden px-3 py-3 text-right lg:table-cell">Men</th>
+                <th className="hidden px-3 py-3 text-right lg:table-cell">Women</th>
+                <th className="hidden px-3 py-3 text-right lg:table-cell">Children</th>
+                <th className="hidden px-3 py-3 text-right sm:table-cell">Visitors</th>
+                <th className="px-3 py-3 text-right">Total</th>
+                <th className="px-6 py-3 text-right">vs week before</th>
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((d, i) => {
+                const prev = list[i + 1]
+                const diff = prev ? d.total - prev.total : null
+                const pct = prev && prev.total ? Math.round(((d.total - prev.total) / prev.total) * 100) : null
+                return (
+                  <tr key={d.date} onClick={() => onOpen(d.date)} className={cn("cursor-pointer border-b border-border/70 transition hover:bg-muted/50", d.date === current && "bg-primary/5")}>
+                    <td className="px-6 py-2.5">
+                      <p className="font-medium">{new Date(`${d.date}T00:00`).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</p>
+                      <p className="text-xs text-muted-foreground md:hidden">{d.services.map((x) => `${x.service.replace(" Service", "")} ${x.total}`).join(" · ")}</p>
+                    </td>
+                    {cols.map((c) => <td key={c} className="hidden px-3 py-2.5 text-right tabular md:table-cell">{svc(d, c) ?? <span className="text-muted-foreground">—</span>}</td>)}
+                    <td className="hidden px-3 py-2.5 text-right tabular lg:table-cell">{d.men}</td>
+                    <td className="hidden px-3 py-2.5 text-right tabular lg:table-cell">{d.women}</td>
+                    <td className="hidden px-3 py-2.5 text-right tabular lg:table-cell">{d.children}</td>
+                    <td className="hidden px-3 py-2.5 text-right tabular sm:table-cell">{d.visitors}</td>
+                    <td className="px-3 py-2.5 text-right text-base font-semibold tabular">{d.total}</td>
+                    <td className={cn("px-6 py-2.5 text-right text-xs tabular", diff === null ? "text-muted-foreground" : diff > 0 ? "text-success" : diff < 0 ? "text-destructive" : "text-muted-foreground")}>
+                      {diff === null ? "—" : `${diff > 0 ? "▲ +" : diff < 0 ? "▼ " : ""}${diff === 0 ? "same" : diff}${pct !== null && diff !== 0 ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}`}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-secondary/50 text-xs text-muted-foreground">
+                <td className="px-6 py-2.5 font-semibold">Average of {list.length} Sunday{list.length === 1 ? "" : "s"}</td>
+                {cols.map((c) => { const v = list.map((d) => svc(d, c)).filter((x): x is number => x !== null); return <td key={c} className="hidden px-3 py-2.5 text-right tabular md:table-cell">{v.length ? Math.round(v.reduce((a, b) => a + b, 0) / v.length) : "—"}</td> })}
+                {(["men", "women", "children"] as const).map((k) => <td key={k} className="hidden px-3 py-2.5 text-right tabular lg:table-cell">{Math.round(list.reduce((a, d) => a + d[k], 0) / list.length)}</td>)}
+                <td className="hidden px-3 py-2.5 text-right tabular sm:table-cell">{Math.round(list.reduce((a, d) => a + d.visitors, 0) / list.length)}</td>
+                <td className="px-3 py-2.5 text-right font-semibold tabular text-foreground">{Math.round(list.reduce((a, d) => a + d.total, 0) / list.length)}</td>
+                <td className="px-6 py-2.5" />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </Card>
   )
 }
